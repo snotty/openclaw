@@ -123,5 +123,8 @@ Logbook registers Gateway RPC methods for the dashboard: `logbook.status`,
   leave the machine except as model input for analysis batches.
 - Use a local vision model (for example via a local provider endpoint) for a
   fully on-device pipeline.
-- `screen.snapshot` is part of the default node command allowlist on macOS;
-  remove it from `gateway.nodes.allowCommands` to block capture entirely.
+- Frames, the timeline database, and temporary captures are written with
+  owner-only file permissions.
+- Adding `screen.snapshot` to `gateway.nodes.denyCommands` is the
+  screen-capture kill switch: it blocks app-node capture and Logbook's own
+  `logbook.snapshot` command alike.
