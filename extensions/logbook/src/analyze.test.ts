@@ -159,17 +159,27 @@ describe("selectBatchFrames", () => {
     expect(selectBatchFrames({ frames, windowMs, nowMs: t0 + 5 * 60_000 })).toBeNull();
   });
 
-  it("closes the window once elapsed", () => {
+  it("closes an elapsed window at its boundary so batches meet cleanly", () => {
     const frames = [frame(1, 0), frame(2, 30), frame(3, 60)];
     const selection = selectBatchFrames({ frames, windowMs, nowMs: t0 + windowMs + 1000 });
     expect(selection?.frameIds).toEqual([1, 2, 3]);
     expect(selection?.startMs).toBe(t0);
+    expect(selection?.endMs).toBe(t0 + windowMs);
   });
 
-  it("splits on capture gaps larger than the max gap", () => {
+  it("splits on capture gaps without claiming the idle span", () => {
     const frames = [frame(1, 0), frame(2, 30), frame(3, 400)];
     const selection = selectBatchFrames({ frames, windowMs, nowMs: t0 + 60_000 });
     expect(selection?.frameIds).toEqual([1, 2]);
+    expect(selection?.endMs).toBe(t0 + 30_000 + 1);
+  });
+
+  it("force-closes an in-progress window at the last observed frame", () => {
+    const frames = [frame(1, 0), frame(2, 30)];
+    expect(selectBatchFrames({ frames, windowMs, nowMs: t0 + 60_000 })).toBeNull();
+    const forced = selectBatchFrames({ frames, windowMs, nowMs: t0 + 60_000, force: true });
+    expect(forced?.frameIds).toEqual([1, 2]);
+    expect(forced?.endMs).toBe(t0 + 30_000 + 1);
   });
 
   it("splits at local midnight so batch clocks stay on one day", () => {

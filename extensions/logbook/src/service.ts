@@ -332,7 +332,8 @@ export class LogbookService {
       const selection = selectBatchFrames({
         frames,
         windowMs: this.config.analysisIntervalMinutes * 60_000,
-        nowMs: Number.MAX_SAFE_INTEGER,
+        nowMs: Date.now(),
+        force: true,
       });
       if (!selection) {
         return { started: false, reason: "no unanalyzed activity captured yet" };

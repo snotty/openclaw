@@ -307,6 +307,8 @@ export function revisionWindow(params: {
 /** Groups pending frames into one batch window, splitting on large gaps. */
 export function selectBatchFrames(params: {
   frames: Array<{ id: number; capturedAtMs: number }>;
+  /** Close an in-progress window immediately instead of waiting for elapse. */
+  force?: boolean;
   windowMs: number;
   nowMs: number;
 }): { frameIds: number[]; startMs: number; endMs: number } | null {
@@ -337,17 +339,23 @@ export function selectBatchFrames(params: {
     return null;
   }
   const last = selected[selected.length - 1];
-  // Only close a batch once its window has elapsed (or a gap ended it), so a
-  // window in progress keeps accumulating frames instead of fragmenting.
+  // Only close a batch once its window has elapsed (or a gap/midnight ended
+  // it), so a window in progress keeps accumulating frames; `force` closes an
+  // in-progress window immediately (analyze now).
   const windowElapsed = params.nowMs >= windowEnd;
-  const endedByGap = selected.length < params.frames.length;
-  if (!windowElapsed && !endedByGap) {
+  const endedEarly = selected.length < params.frames.length;
+  if (!windowElapsed && !endedEarly && !params.force) {
     return null;
   }
+  // A normally elapsed window ends at its boundary so consecutive batches meet
+  // cleanly; ending at the last frame would leak one capture interval per
+  // batch as a permanent timeline gap. Early or forced closures must not claim
+  // time past the last observed frame (idle gap, next day, or the future).
+  const endMs = windowElapsed && !endedEarly ? windowEnd : last.capturedAtMs + 1;
   return {
     frameIds: selected.map((frame) => frame.id),
     startMs: first.capturedAtMs,
-    endMs: last.capturedAtMs + 1,
+    endMs,
   };
 }
 
