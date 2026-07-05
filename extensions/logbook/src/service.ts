@@ -249,8 +249,9 @@ export class LogbookService {
       // stored for the filmstrip but excluded from analysis batches.
       const idle = this.store.lastFrame()?.contentHash === contentHash;
       const filePath = this.store.frameFilePath(day, capturedAtMs);
-      mkdirSync(path.dirname(filePath), { recursive: true });
-      writeFileSync(filePath, buffer);
+      // Screen captures can contain secrets; keep them owner-only.
+      mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
+      writeFileSync(filePath, buffer, { mode: 0o600 });
       this.store.insertFrame({
         capturedAtMs,
         day,

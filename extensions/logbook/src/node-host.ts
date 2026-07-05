@@ -3,7 +3,7 @@
 // logbook.snapshot so capture works anywhere the plugin is enabled.
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFile, rm } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -48,6 +48,9 @@ export async function handleLogbookSnapshot(rawParams: unknown): Promise<Logbook
   );
   const filePath = path.join(tmpdir(), `logbook-snapshot-${randomUUID()}.jpg`);
   try {
+    // Pre-create owner-only: screencapture truncates the existing inode, so
+    // the capture never becomes world-readable in the shared temp dir.
+    await writeFile(filePath, "", { mode: 0o600 });
     // -x: no capture sound; -C: include cursor; -D is 1-based display index.
     await execFileAsync("screencapture", [
       "-x",

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -167,6 +167,13 @@ describe("LogbookStore", () => {
     const requeued = store.nextPendingBatch();
     expect(requeued?.id).toBe(batchId);
     expect(requeued?.error).toBeUndefined();
+  });
+
+  it("keeps capture data owner-only on disk", () => {
+    const mode = (p: string) => statSync(p).mode & 0o777;
+    expect(mode(dir)).toBe(0o700);
+    expect(mode(store.framesDir)).toBe(0o700);
+    expect(mode(path.join(dir, "logbook.sqlite"))).toBe(0o600);
   });
 
   it("stores and updates standups", () => {

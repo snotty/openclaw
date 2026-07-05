@@ -1,7 +1,7 @@
 // Logbook SQLite store: frames on disk, everything else in one plugin-owned DB.
 // Uses node:sqlite prepared statements directly (extension-local store, same
 // pattern as memory-core/imessage); the shared Kysely helpers are core-only.
-import { mkdirSync, rmdirSync, rmSync } from "node:fs";
+import { chmodSync, mkdirSync, rmdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type {
@@ -174,11 +174,18 @@ export class LogbookStore {
   readonly framesDir: string;
 
   constructor(readonly dataDir: string) {
-    mkdirSync(dataDir, { recursive: true });
+    // Frames and the DB hold raw screen contents; keep everything owner-only
+    // even when the surrounding state dir is more permissive.
+    mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    chmodSync(dataDir, 0o700);
     this.framesDir = path.join(dataDir, "frames");
-    mkdirSync(this.framesDir, { recursive: true });
+    mkdirSync(this.framesDir, { recursive: true, mode: 0o700 });
+    chmodSync(this.framesDir, 0o700);
     const { DatabaseSync } = loadNodeSqlite();
-    this.db = new DatabaseSync(path.join(dataDir, "logbook.sqlite"));
+    const dbPath = path.join(dataDir, "logbook.sqlite");
+    this.db = new DatabaseSync(dbPath);
+    // WAL/SHM sidecars inherit the main DB file's permissions.
+    chmodSync(dbPath, 0o600);
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec("PRAGMA busy_timeout = 1000");
     this.db.exec(SCHEMA);
