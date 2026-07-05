@@ -136,6 +136,22 @@ describe("LogbookStore", () => {
     expect(store.cardsForDay(DAY)[0]?.keyframeId).toBeUndefined();
   });
 
+  it("replaces observations on batch retry instead of appending", () => {
+    const t0 = Date.now();
+    const frameId = insertFrame(t0);
+    const batchId = store.createBatch({
+      day: DAY,
+      startMs: t0,
+      endMs: t0 + 1000,
+      frameIds: [frameId],
+    });
+    store.replaceObservations(batchId, DAY, [{ startMs: t0, endMs: t0 + 500, text: "first run" }]);
+    store.replaceObservations(batchId, DAY, [{ startMs: t0, endMs: t0 + 500, text: "retry run" }]);
+    const observations = store.observationsInRange(DAY, 0, Number.MAX_SAFE_INTEGER);
+    expect(observations).toHaveLength(1);
+    expect(observations[0].text).toBe("retry run");
+  });
+
   it("requeues errored batches for explicit retry", () => {
     const t0 = Date.now();
     const frameId = insertFrame(t0);

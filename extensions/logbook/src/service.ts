@@ -453,7 +453,7 @@ export class LogbookService {
         store.setBatchStatus(batch.id, "error", "vision model returned no usable segments");
         return;
       }
-      store.insertObservations(batch.id, batch.day, segments);
+      store.replaceObservations(batch.id, batch.day, segments);
       await this.reviseCards(batch);
       store.setBatchStatus(batch.id, "done");
     } catch (err) {

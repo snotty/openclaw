@@ -392,16 +392,29 @@ export class LogbookStore {
     return rows.map(toFrame);
   }
 
-  insertObservations(
+  /**
+   * Replaces a batch's observations atomically. Batch retries (analyze now
+   * after an error) rerun the vision stage, so appending would duplicate
+   * evidence into card synthesis, standups, and ask answers.
+   */
+  replaceObservations(
     batchId: number,
     day: string,
     segments: Array<{ startMs: number; endMs: number; text: string }>,
   ): void {
-    const insert = this.db.prepare(
-      `INSERT INTO observations (batch_id, day, start_ms, end_ms, text) VALUES (?, ?, ?, ?, ?)`,
-    );
-    for (const segment of segments) {
-      insert.run(batchId, day, segment.startMs, segment.endMs, segment.text);
+    this.db.exec("BEGIN");
+    try {
+      this.db.prepare(`DELETE FROM observations WHERE batch_id = ?`).run(batchId);
+      const insert = this.db.prepare(
+        `INSERT INTO observations (batch_id, day, start_ms, end_ms, text) VALUES (?, ?, ?, ?, ?)`,
+      );
+      for (const segment of segments) {
+        insert.run(batchId, day, segment.startMs, segment.endMs, segment.text);
+      }
+      this.db.exec("COMMIT");
+    } catch (err) {
+      this.db.exec("ROLLBACK");
+      throw err;
     }
   }
 
