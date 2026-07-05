@@ -339,6 +339,16 @@ export class LogbookStore {
       .run(Date.now());
   }
 
+  /** Requeues failed batches for an explicit user-driven retry (analyze now). */
+  resetErrorBatches(): number {
+    const result = this.db
+      .prepare(
+        `UPDATE batches SET status = 'pending', error = NULL, updated_ms = ? WHERE status = 'error'`,
+      )
+      .run(Date.now());
+    return Number(result.changes);
+  }
+
   nextPendingBatch(): LogbookBatch | null {
     const row = this.db
       .prepare(
@@ -555,6 +565,14 @@ export class LogbookStore {
       rmSync(row.path, { force: true });
       days.add(row.day);
     }
+    // Cards outlive their frames; a dangling keyframe_id would make the UI
+    // retry a preview fetch forever, so detach it before the rows disappear.
+    this.db
+      .prepare(
+        `UPDATE cards SET keyframe_id = NULL
+         WHERE keyframe_id IN (SELECT id FROM frames WHERE captured_at_ms < ?)`,
+      )
+      .run(olderThanMs);
     this.db.prepare(`DELETE FROM frames WHERE captured_at_ms < ?`).run(olderThanMs);
     for (const day of days) {
       // Best-effort: removes now-empty day directories, keeps non-empty ones.

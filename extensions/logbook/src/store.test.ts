@@ -128,6 +128,31 @@ describe("LogbookStore", () => {
     expect(store.frameById(newId)).not.toBeNull();
   });
 
+  it("detaches pruned keyframes from surviving cards", () => {
+    const now = Date.now();
+    const oldId = insertFrame(now - 20 * 24 * 60 * 60_000);
+    store.replaceCardsInWindow(DAY, 0, Number.MAX_SAFE_INTEGER, [draft({ keyframeId: oldId })]);
+    store.pruneFrames(now - 14 * 24 * 60 * 60_000);
+    expect(store.cardsForDay(DAY)[0]?.keyframeId).toBeUndefined();
+  });
+
+  it("requeues errored batches for explicit retry", () => {
+    const t0 = Date.now();
+    const frameId = insertFrame(t0);
+    const batchId = store.createBatch({
+      day: dayKeyFor(t0),
+      startMs: t0,
+      endMs: t0 + 1000,
+      frameIds: [frameId],
+    });
+    store.setBatchStatus(batchId, "error", "boom");
+    expect(store.nextPendingBatch()).toBeNull();
+    expect(store.resetErrorBatches()).toBe(1);
+    const requeued = store.nextPendingBatch();
+    expect(requeued?.id).toBe(batchId);
+    expect(requeued?.error).toBeUndefined();
+  });
+
   it("stores and updates standups", () => {
     store.saveStandup(DAY, "## Done\n- shipped");
     store.saveStandup(DAY, "## Done\n- shipped more");

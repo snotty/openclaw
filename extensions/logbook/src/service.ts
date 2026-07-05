@@ -32,6 +32,9 @@ import type { LogbookBatch, LogbookCard } from "./types.js";
 
 const ANALYSIS_TICK_MS = 60 * 1000;
 const PRUNE_TICK_MS = 60 * 60 * 1000;
+const MODEL_MISSING_MESSAGE =
+  "no vision model: set plugins.entries.logbook.config.visionModel or configure tools.media";
+const MODEL_MISSING_LOG_INTERVAL_MS = 10 * 60 * 1000;
 const CAPTURE_FAILURE_PAUSE_TICKS = 10;
 const CAPTURE_FAILURE_THRESHOLD = 3;
 const JPEG_QUALITY = 0.6;
@@ -99,6 +102,7 @@ export class LogbookService {
   private captureBackoffTicks = 0;
   private lastCaptureAtMs: number | undefined;
   private lastCaptureError: string | undefined;
+  private lastModelMissingLogMs = 0;
   private cachedNode: { nodeId: string; displayName?: string; command: string } | null = null;
 
   constructor(
@@ -316,6 +320,12 @@ export class LogbookService {
     if (this.analysisInFlight) {
       return { started: false, reason: "analysis already running" };
     }
+    if (!this.resolveVisionModel().ref) {
+      return { started: false, reason: MODEL_MISSING_MESSAGE };
+    }
+    // Explicit user action is the retry path for failed batches; automatic
+    // retries could loop model spend on a persistently failing batch.
+    store.resetErrorBatches();
     if (!store.nextPendingBatch()) {
       const frames = store.unbatchedActiveFrames(2000);
       // Force-close the current window so "analyze now" needs no elapsed time.
@@ -340,6 +350,17 @@ export class LogbookService {
 
   private async analysisTick(): Promise<void> {
     if (this.analysisInFlight || !this.store) {
+      return;
+    }
+    // Without a vision model, leave frames unbatched and batches pending so
+    // everything analyzes once the operator configures one; erroring here
+    // would permanently strand the assigned frames.
+    if (!this.resolveVisionModel().ref) {
+      const now = Date.now();
+      if (now - this.lastModelMissingLogMs > MODEL_MISSING_LOG_INTERVAL_MS) {
+        this.lastModelMissingLogMs = now;
+        this.deps.logger.warn(`logbook: analysis paused; ${MODEL_MISSING_MESSAGE}`);
+      }
       return;
     }
     this.analysisInFlight = true;
@@ -386,11 +407,7 @@ export class LogbookService {
     const store = this.requireStore();
     const vision = this.resolveVisionModel();
     if (!vision.ref) {
-      store.setBatchStatus(
-        batch.id,
-        "error",
-        "no vision model: set plugins.entries.logbook.config.visionModel or configure tools.media",
-      );
+      // Stay pending: the analysis tick pauses until a model is configured.
       return;
     }
     store.setBatchStatus(

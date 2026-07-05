@@ -114,10 +114,15 @@ function renderCard(
 ): TemplateResult {
   const expanded = state.expandedCardIds.has(card.id);
   const hue = categoryHue(card.category);
-  const preview =
-    card.keyframeId !== undefined ? state.framePreviews.get(card.keyframeId) : undefined;
-  if (expanded && card.keyframeId !== undefined && !preview) {
-    void loadLogbookFramePreview(state, client, card.keyframeId);
+  // Pruned keyframes look permanently absent; treating them as loading would
+  // re-request the missing frame on every render.
+  const keyframeId =
+    card.keyframeId !== undefined && !state.framePreviewFailed.has(card.keyframeId)
+      ? card.keyframeId
+      : undefined;
+  const preview = keyframeId !== undefined ? state.framePreviews.get(keyframeId) : undefined;
+  if (expanded && keyframeId !== undefined && !preview) {
+    void loadLogbookFramePreview(state, client, keyframeId);
   }
   return html`
     <article
@@ -165,7 +170,7 @@ function renderCard(
                     src=${preview}
                     alt=${t("logbook.card.keyframeAlt")}
                   />`
-                : card.keyframeId !== undefined
+                : keyframeId !== undefined
                   ? html`<div class="logbook-card__keyframe logbook-card__keyframe--loading">
                       ${t("common.loading")}
                     </div>`

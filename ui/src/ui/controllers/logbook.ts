@@ -65,6 +65,7 @@ export type LogbookUiState = {
   expandedCardIds: Set<number>;
   framePreviews: Map<number, string>;
   frameLoads: Set<number>;
+  framePreviewFailed: Set<number>;
   standup: { day: string; text: string; updatedMs: number } | null;
   standupLoading: boolean;
   askQuestion: string;
@@ -106,6 +107,7 @@ export function getLogbookState(host: object): LogbookUiState {
       expandedCardIds: new Set(),
       framePreviews: new Map(),
       frameLoads: new Set(),
+      framePreviewFailed: new Set(),
       standup: null,
       standupLoading: false,
       askQuestion: "",
@@ -189,7 +191,12 @@ export async function loadLogbookFramePreview(
   client: GatewayBrowserClient | null,
   frameId: number,
 ): Promise<void> {
-  if (!client || state.framePreviews.has(frameId) || state.frameLoads.has(frameId)) {
+  if (
+    !client ||
+    state.framePreviews.has(frameId) ||
+    state.frameLoads.has(frameId) ||
+    state.framePreviewFailed.has(frameId)
+  ) {
     return;
   }
   state.frameLoads.add(frameId);
@@ -205,7 +212,9 @@ export async function loadLogbookFramePreview(
     }
     state.framePreviews.set(frameId, `data:image/${payload.format};base64,${payload.base64}`);
   } catch {
-    // Preview loads are cosmetic; the card stays usable without one.
+    // Preview loads are cosmetic, but a missing frame (e.g. pruned by
+    // retention) must not re-fetch on every render, so remember the failure.
+    state.framePreviewFailed.add(frameId);
   } finally {
     state.frameLoads.delete(frameId);
     notify(state);
