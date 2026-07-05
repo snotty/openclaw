@@ -423,12 +423,12 @@ export const ar: TranslationMap = {
     debug: "تصحيح الأخطاء",
     logs: "السجلات",
     dreams: "الحلم",
-    daylog: "Daylog",
+    logbook: "Logbook",
   },
   subtitles: {
     agents: "مساحات العمل، والأدوات، والهويات.",
     activity: "ملخصات نشاط الأدوات المحلية في المتصفح.",
-    daylog: "Your day as a timeline, built from screen snapshots.",
+    logbook: "Your day as a timeline, built from screen snapshots.",
     overview: "الحالة، ونقاط الدخول، والصحة.",
     workboard: "قائمة عمل الوكيل وتسليم الجلسات.",
     channels: "القنوات والإعدادات.",
@@ -510,9 +510,9 @@ export const ar: TranslationMap = {
     truncated: "Log output truncated; showing latest chunk.",
     empty: "No log entries.",
   },
-  daylog: {
-    disabledHelpStart: "Daylog is disabled. Enable",
-    enableConfigKey: "plugins.entries.daylog.enabled = true",
+  logbook: {
+    disabledHelpStart: "Logbook is disabled. Enable",
+    enableConfigKey: "plugins.entries.logbook.enabled = true",
     disabledHelpEnd:
       ", pair a node with screen access (for example the OpenClaw Mac app), then reload this tab.",
     duration: {
@@ -536,7 +536,7 @@ export const ar: TranslationMap = {
       batchError: "Analysis error",
       modelMissing: "No vision model",
       modelMissingHelp:
-        "Set plugins.entries.daylog.config.visionModel or configure tools.media models.",
+        "Set plugins.entries.logbook.config.visionModel (for example codex/gpt-5.5) or configure tools.media models.",
     },
     actions: {
       pause: "Pause",
@@ -546,7 +546,7 @@ export const ar: TranslationMap = {
     empty: {
       title: "Nothing on the timeline yet.",
       subtitle:
-        "Daylog is collecting snapshots; cards appear after the first analysis batch completes.",
+        "Logbook is collecting snapshots; cards appear after the first analysis batch completes.",
     },
     card: {
       keyframeAlt: "Screen snapshot from this activity",

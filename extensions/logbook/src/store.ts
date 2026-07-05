@@ -1,18 +1,18 @@
-// Daylog SQLite store: frames on disk, everything else in one plugin-owned DB.
+// Logbook SQLite store: frames on disk, everything else in one plugin-owned DB.
 // Uses node:sqlite prepared statements directly (extension-local store, same
 // pattern as memory-core/imessage); the shared Kysely helpers are core-only.
 import { mkdirSync, rmdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type {
-  DaylogBatch,
-  DaylogBatchStatus,
-  DaylogCard,
-  DaylogCardDraft,
-  DaylogDayStats,
-  DaylogDistraction,
-  DaylogFrame,
-  DaylogObservation,
+  LogbookBatch,
+  LogbookBatchStatus,
+  LogbookCard,
+  LogbookCardDraft,
+  LogbookDayStats,
+  LogbookDistraction,
+  LogbookFrame,
+  LogbookObservation,
 } from "./types.js";
 
 type SqliteModule = typeof import("node:sqlite");
@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS frames (
   idle INTEGER NOT NULL DEFAULT 0,
   batch_id INTEGER
 );
-CREATE INDEX IF NOT EXISTS idx_daylog_frames_day ON frames (day, captured_at_ms);
-CREATE INDEX IF NOT EXISTS idx_daylog_frames_unbatched ON frames (batch_id) WHERE batch_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_logbook_frames_day ON frames (day, captured_at_ms);
+CREATE INDEX IF NOT EXISTS idx_logbook_frames_unbatched ON frames (batch_id) WHERE batch_id IS NULL;
 CREATE TABLE IF NOT EXISTS batches (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   day TEXT NOT NULL,
@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS batches (
   created_ms INTEGER NOT NULL,
   updated_ms INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_daylog_batches_day ON batches (day, start_ms);
+CREATE INDEX IF NOT EXISTS idx_logbook_batches_day ON batches (day, start_ms);
 CREATE TABLE IF NOT EXISTS observations (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   batch_id INTEGER NOT NULL,
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS observations (
   end_ms INTEGER NOT NULL,
   text TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_daylog_observations_day ON observations (day, start_ms);
+CREATE INDEX IF NOT EXISTS idx_logbook_observations_day ON observations (day, start_ms);
 CREATE TABLE IF NOT EXISTS cards (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   day TEXT NOT NULL,
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS cards (
   keyframe_id INTEGER,
   updated_ms INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_daylog_cards_day ON cards (day, start_ms);
+CREATE INDEX IF NOT EXISTS idx_logbook_cards_day ON cards (day, start_ms);
 CREATE TABLE IF NOT EXISTS standups (
   day TEXT PRIMARY KEY,
   text TEXT NOT NULL,
@@ -111,7 +111,7 @@ type CardRow = {
   keyframe_id: number | null;
 };
 
-function toFrame(row: FrameRow): DaylogFrame {
+function toFrame(row: FrameRow): LogbookFrame {
   return {
     id: row.id,
     capturedAtMs: row.captured_at_ms,
@@ -125,26 +125,26 @@ function toFrame(row: FrameRow): DaylogFrame {
   };
 }
 
-function parseDistractions(raw: string): DaylogDistraction[] {
+function parseDistractions(raw: string): LogbookDistraction[] {
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) {
       return [];
     }
     return parsed.filter(
-      (entry): entry is DaylogDistraction =>
+      (entry): entry is LogbookDistraction =>
         !!entry &&
         typeof entry === "object" &&
-        typeof (entry as DaylogDistraction).title === "string" &&
-        typeof (entry as DaylogDistraction).startMs === "number" &&
-        typeof (entry as DaylogDistraction).endMs === "number",
+        typeof (entry as LogbookDistraction).title === "string" &&
+        typeof (entry as LogbookDistraction).startMs === "number" &&
+        typeof (entry as LogbookDistraction).endMs === "number",
     );
   } catch {
     return [];
   }
 }
 
-function toCard(row: CardRow): DaylogCard {
+function toCard(row: CardRow): LogbookCard {
   return {
     id: row.id,
     day: row.day,
@@ -169,7 +169,7 @@ export function dayKeyFor(ms: number): string {
   return `${date.getFullYear()}-${month}-${dayOfMonth}`;
 }
 
-export class DaylogStore {
+export class LogbookStore {
   private readonly db: Database;
   readonly framesDir: string;
 
@@ -178,7 +178,7 @@ export class DaylogStore {
     this.framesDir = path.join(dataDir, "frames");
     mkdirSync(this.framesDir, { recursive: true });
     const { DatabaseSync } = loadNodeSqlite();
-    this.db = new DatabaseSync(path.join(dataDir, "daylog.sqlite"));
+    this.db = new DatabaseSync(path.join(dataDir, "logbook.sqlite"));
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec("PRAGMA busy_timeout = 1000");
     this.db.exec(SCHEMA);
@@ -231,7 +231,7 @@ export class DaylogStore {
     return row ? { capturedAtMs: row.captured_at_ms, contentHash: row.content_hash } : null;
   }
 
-  unbatchedActiveFrames(limit: number): DaylogFrame[] {
+  unbatchedActiveFrames(limit: number): LogbookFrame[] {
     const rows = this.db
       .prepare(
         `SELECT id, captured_at_ms, day, path, screen_index, width, height, byte_size, idle
@@ -249,7 +249,7 @@ export class DaylogStore {
     return row.n;
   }
 
-  frameById(id: number): DaylogFrame | null {
+  frameById(id: number): LogbookFrame | null {
     const row = this.db
       .prepare(
         `SELECT id, captured_at_ms, day, path, screen_index, width, height, byte_size, idle
@@ -259,7 +259,7 @@ export class DaylogStore {
     return row ? toFrame(row) : null;
   }
 
-  framesInRange(startMs: number, endMs: number): DaylogFrame[] {
+  framesInRange(startMs: number, endMs: number): LogbookFrame[] {
     const rows = this.db
       .prepare(
         `SELECT id, captured_at_ms, day, path, screen_index, width, height, byte_size, idle
@@ -286,7 +286,12 @@ export class DaylogStore {
     return batchId;
   }
 
-  setBatchStatus(batchId: number, status: DaylogBatchStatus, error?: string, model?: string): void {
+  setBatchStatus(
+    batchId: number,
+    status: LogbookBatchStatus,
+    error?: string,
+    model?: string,
+  ): void {
     this.db
       .prepare(
         `UPDATE batches SET status = ?, error = ?, model = COALESCE(?, model), updated_ms = ? WHERE id = ?`,
@@ -294,7 +299,7 @@ export class DaylogStore {
       .run(status, error ?? null, model ?? null, Date.now(), batchId);
   }
 
-  latestBatch(): DaylogBatch | null {
+  latestBatch(): LogbookBatch | null {
     const row = this.db
       .prepare(
         `SELECT id, day, start_ms, end_ms, status, error, frame_count, model
@@ -306,7 +311,7 @@ export class DaylogStore {
           day: string;
           start_ms: number;
           end_ms: number;
-          status: DaylogBatchStatus;
+          status: LogbookBatchStatus;
           error: string | null;
           frame_count: number;
           model: string | null;
@@ -334,7 +339,7 @@ export class DaylogStore {
       .run(Date.now());
   }
 
-  nextPendingBatch(): DaylogBatch | null {
+  nextPendingBatch(): LogbookBatch | null {
     const row = this.db
       .prepare(
         `SELECT id, day, start_ms, end_ms, status, error, frame_count, model
@@ -346,7 +351,7 @@ export class DaylogStore {
           day: string;
           start_ms: number;
           end_ms: number;
-          status: DaylogBatchStatus;
+          status: LogbookBatchStatus;
           error: string | null;
           frame_count: number;
           model: string | null;
@@ -367,7 +372,7 @@ export class DaylogStore {
     };
   }
 
-  batchFrames(batchId: number): DaylogFrame[] {
+  batchFrames(batchId: number): LogbookFrame[] {
     const rows = this.db
       .prepare(
         `SELECT id, captured_at_ms, day, path, screen_index, width, height, byte_size, idle
@@ -390,7 +395,7 @@ export class DaylogStore {
     }
   }
 
-  observationsInRange(day: string, startMs: number, endMs: number): DaylogObservation[] {
+  observationsInRange(day: string, startMs: number, endMs: number): LogbookObservation[] {
     const rows = this.db
       .prepare(
         `SELECT id, batch_id, day, start_ms, end_ms, text FROM observations
@@ -414,7 +419,7 @@ export class DaylogStore {
     }));
   }
 
-  cardsForDay(day: string): DaylogCard[] {
+  cardsForDay(day: string): LogbookCard[] {
     const rows = this.db
       .prepare(
         `SELECT id, day, start_ms, end_ms, title, summary, detail, category, app_primary, app_secondary, distractions, keyframe_id
@@ -424,7 +429,7 @@ export class DaylogStore {
     return rows.map(toCard);
   }
 
-  cardById(id: number): DaylogCard | null {
+  cardById(id: number): LogbookCard | null {
     const row = this.db
       .prepare(
         `SELECT id, day, start_ms, end_ms, title, summary, detail, category, app_primary, app_secondary, distractions, keyframe_id
@@ -443,7 +448,7 @@ export class DaylogStore {
     day: string,
     startMs: number,
     endMs: number,
-    drafts: DaylogCardDraft[],
+    drafts: LogbookCardDraft[],
   ): void {
     const now = Date.now();
     this.db.exec("BEGIN");
@@ -493,7 +498,7 @@ export class DaylogStore {
     }));
   }
 
-  dayStats(day: string): DaylogDayStats {
+  dayStats(day: string): LogbookDayStats {
     const cards = this.cardsForDay(day);
     const categories = new Map<string, number>();
     const apps = new Map<string, number>();

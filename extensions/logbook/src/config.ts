@@ -1,6 +1,6 @@
-// Daylog plugin config resolution: clamps operator input into safe runtime bounds.
+// Logbook plugin config resolution: clamps operator input into safe runtime bounds.
 
-export type DaylogConfig = {
+export type LogbookConfig = {
   captureEnabled: boolean;
   captureIntervalSeconds: number;
   analysisIntervalMinutes: number;
@@ -33,7 +33,7 @@ function optionalString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-export function resolveDaylogConfig(raw: unknown): DaylogConfig {
+export function resolveLogbookConfig(raw: unknown): LogbookConfig {
   const value = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   return {
     captureEnabled: value.captureEnabled !== false,

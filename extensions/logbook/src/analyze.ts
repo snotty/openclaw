@@ -1,8 +1,8 @@
-// Daylog analysis pipeline: frames -> observations -> revised timeline cards.
+// Logbook analysis pipeline: frames -> observations -> revised timeline cards.
 // Pure parsing/validation lives here so tests can cover it without the SDK.
 import { CARD_CATEGORIES } from "./prompts.js";
 import { dayKeyFor } from "./store.js";
-import type { DaylogCard, DaylogCardDraft, DaylogDistraction } from "./types.js";
+import type { LogbookCard, LogbookCardDraft, LogbookDistraction } from "./types.js";
 
 /** Cards within this window before a batch are treated as a revisable draft. */
 export const CARD_LOOKBACK_MS = 45 * 60 * 1000;
@@ -105,7 +105,7 @@ type RawCard = {
 };
 
 export type CardParseResult =
-  | { ok: true; drafts: DaylogCardDraft[] }
+  | { ok: true; drafts: LogbookCardDraft[] }
   | { ok: false; error: string };
 
 function normalizeCategory(value: unknown): string {
@@ -125,11 +125,11 @@ function normalizeDomain(value: unknown): string | undefined {
   return domain && domain.length <= 100 ? domain : undefined;
 }
 
-function parseDistractions(day: string, value: unknown): DaylogDistraction[] {
+function parseDistractions(day: string, value: unknown): LogbookDistraction[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  const distractions: DaylogDistraction[] = [];
+  const distractions: LogbookDistraction[] = [];
   for (const entry of value) {
     if (!entry || typeof entry !== "object") {
       continue;
@@ -161,7 +161,7 @@ export function parseCardsJson(params: {
   if (!Array.isArray(parsed)) {
     return { ok: false, error: "Output must be a JSON array of cards." };
   }
-  const drafts: DaylogCardDraft[] = [];
+  const drafts: LogbookCardDraft[] = [];
   const problems: string[] = [];
   parsed.forEach((entry, index) => {
     if (!entry || typeof entry !== "object") {
@@ -293,7 +293,7 @@ export function validateCardCoverage(params: {
 export function revisionWindow(params: {
   batchStartMs: number;
   batchEndMs: number;
-  previousCards: DaylogCard[];
+  previousCards: LogbookCard[];
 }): { startMs: number; endMs: number } {
   let startMs = params.batchStartMs;
   let endMs = params.batchEndMs;

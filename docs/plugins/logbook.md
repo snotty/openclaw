@@ -2,12 +2,12 @@
 summary: "Optional automatic work journal built from periodic screen snapshots"
 read_when:
   - You want a Dayflow-style timeline of your day in the Control UI
-  - You are enabling or configuring the bundled Daylog plugin
+  - You are enabling or configuring the bundled Logbook plugin
   - You want standup summaries or day recall grounded in screen activity
-title: "Daylog plugin"
+title: "Logbook plugin"
 ---
 
-The Daylog plugin turns screen activity into an automatic work journal. It
+The Logbook plugin turns screen activity into an automatic work journal. It
 captures periodic screen snapshots from a paired node (for example the OpenClaw
 Mac app), summarizes them with a vision model into timestamped observations,
 and synthesizes those into timeline cards you can browse in the
@@ -20,17 +20,17 @@ configure, so pick a local model if snapshots must never leave the machine.
 
 ## Default state
 
-Daylog is a bundled plugin and is disabled by default. Screen capture is
+Logbook is a bundled plugin and is disabled by default. Screen capture is
 opt-in.
 
 Enable it with:
 
 ```bash
-openclaw plugins enable daylog
+openclaw plugins enable logbook
 openclaw gateway restart
 ```
 
-Then open the dashboard and pick the Daylog tab:
+Then open the dashboard and pick the Logbook tab:
 
 ```bash
 openclaw dashboard
@@ -43,12 +43,12 @@ blocked by `plugins.allow` / `plugins.deny`.
 
 - A connected node that can capture the screen. The macOS app node advertises
   `screen.snapshot` by default (see [Nodes](/nodes)); headless macOS node
-  hosts (`openclaw node host run`) get a plugin-provided `daylog.snapshot`
-  command backed by the system `screencapture` tool when Daylog is enabled.
+  hosts (`openclaw node host run`) get a plugin-provided `logbook.snapshot`
+  command backed by the system `screencapture` tool when Logbook is enabled.
 - A vision model whose media-understanding provider supports structured
   extraction (the bundled Codex plugin does, for example `codex/gpt-5.5`).
-  Daylog resolves the model in order:
-  1. `plugins.entries.daylog.config.visionModel` (`"provider/model"` ref)
+  Logbook resolves the model in order:
+  1. `plugins.entries.logbook.config.visionModel` (`"provider/model"` ref)
   2. the first image-capable entry under `tools.media.image.models` or
      `tools.media.models`
 - Timeline card synthesis, standup notes, and "ask your day" answers use the
@@ -56,7 +56,7 @@ blocked by `plugins.allow` / `plugins.deny`.
 
 ## How it works
 
-1. **Capture**: every `captureIntervalSeconds` (default 30s) Daylog invokes
+1. **Capture**: every `captureIntervalSeconds` (default 30s) Logbook invokes
    `screen.snapshot` on the capture node and stores a scaled JPEG frame.
    Consecutive identical frames are marked idle and excluded from analysis.
 2. **Observe**: once an analysis window (default 15 minutes) elapses, the
@@ -68,7 +68,7 @@ blocked by `plugins.allow` / `plugins.deny`.
 4. **Prune**: frames older than `retentionDays` (default 14) are deleted.
    Cards, observations, and standups are kept.
 
-Frames and the timeline database live under `<state-dir>/daylog/`.
+Frames and the timeline database live under `<state-dir>/logbook/`.
 
 ## Configuration
 
@@ -76,7 +76,7 @@ Frames and the timeline database live under `<state-dir>/daylog/`.
 {
   "plugins": {
     "entries": {
-      "daylog": {
+      "logbook": {
         "enabled": true,
         "config": {
           "captureIntervalSeconds": 30,
@@ -112,10 +112,10 @@ pause toggle.
 
 ## Gateway methods
 
-Daylog registers Gateway RPC methods for the dashboard: `daylog.status`,
-`daylog.days`, `daylog.timeline`, `daylog.frames`, `daylog.frame`,
-`daylog.standup`, `daylog.ask`, `daylog.capture.set`, and
-`daylog.analyze.now`.
+Logbook registers Gateway RPC methods for the dashboard: `logbook.status`,
+`logbook.days`, `logbook.timeline`, `logbook.frames`, `logbook.frame`,
+`logbook.standup`, `logbook.ask`, `logbook.capture.set`, and
+`logbook.analyze.now`.
 
 ## Privacy notes
 

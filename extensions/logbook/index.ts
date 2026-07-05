@@ -1,4 +1,4 @@
-// Daylog plugin entrypoint: automatic work journal built from screen snapshots.
+// Logbook plugin entrypoint: automatic work journal built from screen snapshots.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
@@ -12,15 +12,15 @@ import {
   type OpenClawPluginApi,
   type OpenClawPluginNodeHostCommand,
 } from "openclaw/plugin-sdk/plugin-entry";
-import { resolveDaylogConfig } from "./src/config.js";
-import { DaylogService } from "./src/service.js";
+import { resolveLogbookConfig } from "./src/config.js";
+import { LogbookService } from "./src/service.js";
 import { dayKeyFor } from "./src/store.js";
 
 const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-const daylogConfigSchema = {
+const logbookConfigSchema = {
   parse(value: unknown) {
-    return resolveDaylogConfig(value);
+    return resolveLogbookConfig(value);
   },
 };
 
@@ -43,37 +43,37 @@ function readNumberParam(params: unknown, key: string): number {
   return value;
 }
 
-const daylogNodeHostCommands: OpenClawPluginNodeHostCommand[] = [
+const logbookNodeHostCommands: OpenClawPluginNodeHostCommand[] = [
   {
-    command: "daylog.snapshot",
+    command: "logbook.snapshot",
     cap: "screen",
     dangerous: false,
     handle: async (paramsJSON) => {
-      const { handleDaylogSnapshot } = await import("./src/node-host.js");
+      const { handleLogbookSnapshot } = await import("./src/node-host.js");
       let params: unknown;
       try {
         params = paramsJSON ? JSON.parse(paramsJSON) : undefined;
       } catch {
         params = undefined;
       }
-      return JSON.stringify(await handleDaylogSnapshot(params));
+      return JSON.stringify(await handleLogbookSnapshot(params));
     },
   },
 ];
 
 export default definePluginEntry({
-  id: "daylog",
-  name: "Daylog",
+  id: "logbook",
+  name: "Logbook",
   description: "Automatic work journal built from periodic screen snapshots",
-  configSchema: daylogConfigSchema,
-  nodeHostCommands: daylogNodeHostCommands,
+  configSchema: logbookConfigSchema,
+  nodeHostCommands: logbookNodeHostCommands,
   register(api: OpenClawPluginApi) {
-    const config = daylogConfigSchema.parse(api.pluginConfig);
-    let service: DaylogService | null = null;
+    const config = logbookConfigSchema.parse(api.pluginConfig);
+    let service: LogbookService | null = null;
 
     const requireService = () => {
       if (!service) {
-        throw new Error("Daylog service is not running");
+        throw new Error("Logbook service is not running");
       }
       return service;
     };
@@ -93,22 +93,22 @@ export default definePluginEntry({
         }
       };
 
-    // Adds daylog.snapshot to the default macOS node allowlist; without a
+    // Adds logbook.snapshot to the default macOS node allowlist; without a
     // policy the gateway strips plugin commands from pairing surfaces.
     api.registerNodeInvokePolicy({
-      commands: ["daylog.snapshot"],
+      commands: ["logbook.snapshot"],
       defaultPlatforms: ["macos"],
       handle: async (ctx) => await ctx.invokeNode(),
     });
 
     api.registerService({
-      id: "daylog",
+      id: "logbook",
       start: (ctx) => {
-        service = new DaylogService(config, {
+        service = new LogbookService(config, {
           runtime: api.runtime,
           fullConfig: ctx.config,
           logger: ctx.logger,
-          dataDir: path.join(ctx.stateDir, "daylog"),
+          dataDir: path.join(ctx.stateDir, "logbook"),
         });
         service.start();
       },
@@ -125,17 +125,17 @@ export default definePluginEntry({
     const registerWrite = (method: string, run: (params: unknown) => Promise<unknown> | unknown) =>
       api.registerGatewayMethod(method, handle(run), { scope: "operator.write" });
 
-    registerRead("daylog.status", () => requireService().status());
+    registerRead("logbook.status", () => requireService().status());
 
-    registerRead("daylog.days", () => ({ days: requireService().listDays() }));
+    registerRead("logbook.days", () => ({ days: requireService().listDays() }));
 
-    registerRead("daylog.timeline", (params) => {
+    registerRead("logbook.timeline", (params) => {
       const day = readDayParam(params);
       const svc = requireService();
       return { day, cards: svc.cardsForDay(day), stats: svc.dayStats(day) };
     });
 
-    registerRead("daylog.frames", (params) => {
+    registerRead("logbook.frames", (params) => {
       const startMs = readNumberParam(params, "startMs");
       const endMs = readNumberParam(params, "endMs");
       const frames = requireService()
@@ -144,7 +144,7 @@ export default definePluginEntry({
       return { frames };
     });
 
-    registerRead("daylog.frame", (params) => {
+    registerRead("logbook.frame", (params) => {
       const frameId = readNumberParam(params, "frameId");
       const frame = requireService().frameById(frameId);
       if (!frame) {
@@ -161,12 +161,12 @@ export default definePluginEntry({
     });
 
     // Standup and ask spend model tokens; capture/analyze mutate runtime state.
-    registerWrite("daylog.standup", (params) => {
+    registerWrite("logbook.standup", (params) => {
       const refresh = (params as { refresh?: unknown } | undefined)?.refresh === true;
       return requireService().standup(readDayParam(params), refresh);
     });
 
-    registerWrite("daylog.ask", async (params) => {
+    registerWrite("logbook.ask", async (params) => {
       const question = (params as { question?: unknown } | undefined)?.question;
       if (typeof question !== "string" || question.trim().length === 0) {
         throw new Error("question is required");
@@ -175,13 +175,13 @@ export default definePluginEntry({
       return { answer };
     });
 
-    registerWrite("daylog.capture.set", (params) => {
+    registerWrite("logbook.capture.set", (params) => {
       const paused = (params as { paused?: unknown } | undefined)?.paused === true;
       const svc = requireService();
       svc.setCapturePaused(paused);
       return svc.status();
     });
 
-    registerWrite("daylog.analyze.now", () => requireService().analyzeNow());
+    registerWrite("logbook.analyze.now", () => requireService().analyzeNow());
   },
 });

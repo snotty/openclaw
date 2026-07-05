@@ -1,7 +1,7 @@
-// Control UI controller for the Daylog tab: state, gateway calls, polling.
+// Control UI controller for the Logbook tab: state, gateway calls, polling.
 import type { GatewayBrowserClient } from "../gateway.ts";
 
-export type DaylogStatusPayload = {
+export type LogbookStatusPayload = {
   captureEnabled: boolean;
   capturePaused: boolean;
   captureIntervalSeconds: number;
@@ -21,9 +21,9 @@ export type DaylogStatusPayload = {
   dataDir: string;
 };
 
-export type DaylogDistractionPayload = { startMs: number; endMs: number; title: string };
+export type LogbookDistractionPayload = { startMs: number; endMs: number; title: string };
 
-export type DaylogCardPayload = {
+export type LogbookCardPayload = {
   id: number;
   day: string;
   startMs: number;
@@ -34,32 +34,32 @@ export type DaylogCardPayload = {
   category: string;
   appPrimary?: string;
   appSecondary?: string;
-  distractions: DaylogDistractionPayload[];
+  distractions: LogbookDistractionPayload[];
   keyframeId?: number;
 };
 
-export type DaylogDayStatsPayload = {
+export type LogbookDayStatsPayload = {
   trackedMs: number;
   distractionMs: number;
   categories: Array<{ category: string; ms: number }>;
   apps: Array<{ domain: string; ms: number }>;
 };
 
-export type DaylogTimelinePayload = {
+export type LogbookTimelinePayload = {
   day: string;
-  cards: DaylogCardPayload[];
-  stats: DaylogDayStatsPayload;
+  cards: LogbookCardPayload[];
+  stats: LogbookDayStatsPayload;
 };
 
-export type DaylogDaysPayload = {
+export type LogbookDaysPayload = {
   days: Array<{ day: string; cards: number; firstMs: number; lastMs: number }>;
 };
 
-export type DaylogUiState = {
+export type LogbookUiState = {
   day: string;
-  status: DaylogStatusPayload | null;
-  days: DaylogDaysPayload["days"];
-  timeline: DaylogTimelinePayload | null;
+  status: LogbookStatusPayload | null;
+  days: LogbookDaysPayload["days"];
+  timeline: LogbookTimelinePayload | null;
   loading: boolean;
   error: string | null;
   expandedCardIds: Set<number>;
@@ -79,7 +79,7 @@ export type DaylogUiState = {
 const FRAME_PREVIEW_CACHE_LIMIT = 48;
 const POLL_INTERVAL_MS = 30_000;
 
-const daylogStates = new WeakMap<object, DaylogUiState>();
+const logbookStates = new WeakMap<object, LogbookUiState>();
 
 export function localDayKey(date = new Date()): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -93,8 +93,8 @@ export function shiftDay(day: string, deltaDays: number): string {
   return localDayKey(base);
 }
 
-export function getDaylogState(host: object): DaylogUiState {
-  let state = daylogStates.get(host);
+export function getLogbookState(host: object): LogbookUiState {
+  let state = logbookStates.get(host);
   if (!state) {
     state = {
       day: localDayKey(),
@@ -116,17 +116,17 @@ export function getDaylogState(host: object): DaylogUiState {
       pollTimer: null,
       requestUpdate: null,
     };
-    daylogStates.set(host, state);
+    logbookStates.set(host, state);
   }
   return state;
 }
 
-function notify(state: DaylogUiState): void {
+function notify(state: LogbookUiState): void {
   state.requestUpdate?.();
 }
 
-export async function loadDaylog(
-  state: DaylogUiState,
+export async function loadLogbook(
+  state: LogbookUiState,
   client: GatewayBrowserClient | null,
   opts?: { day?: string; silent?: boolean },
 ): Promise<void> {
@@ -147,9 +147,9 @@ export async function loadDaylog(
   }
   try {
     const [status, days, timeline] = await Promise.all([
-      client.request<DaylogStatusPayload>("daylog.status", {}),
-      client.request<DaylogDaysPayload>("daylog.days", {}),
-      client.request<DaylogTimelinePayload>("daylog.timeline", { day: state.day }),
+      client.request<LogbookStatusPayload>("logbook.status", {}),
+      client.request<LogbookDaysPayload>("logbook.days", {}),
+      client.request<LogbookTimelinePayload>("logbook.timeline", { day: state.day }),
     ]);
     state.status = status;
     state.days = days.days;
@@ -163,8 +163,8 @@ export async function loadDaylog(
   }
 }
 
-export function configureDaylogPolling(
-  state: DaylogUiState,
+export function configureLogbookPolling(
+  state: LogbookUiState,
   client: GatewayBrowserClient | null,
   active: boolean,
 ): void {
@@ -180,12 +180,12 @@ export function configureDaylogPolling(
   }
   state.pollTimer = setInterval(() => {
     // Silent refresh keeps the timeline current while analysis batches land.
-    void loadDaylog(state, client, { silent: true });
+    void loadLogbook(state, client, { silent: true });
   }, POLL_INTERVAL_MS);
 }
 
-export async function loadDaylogFramePreview(
-  state: DaylogUiState,
+export async function loadLogbookFramePreview(
+  state: LogbookUiState,
   client: GatewayBrowserClient | null,
   frameId: number,
 ): Promise<void> {
@@ -194,7 +194,7 @@ export async function loadDaylogFramePreview(
   }
   state.frameLoads.add(frameId);
   try {
-    const payload = await client.request<{ base64: string; format: string }>("daylog.frame", {
+    const payload = await client.request<{ base64: string; format: string }>("logbook.frame", {
       frameId,
     });
     if (state.framePreviews.size >= FRAME_PREVIEW_CACHE_LIMIT) {
@@ -212,8 +212,8 @@ export async function loadDaylogFramePreview(
   }
 }
 
-export async function setDaylogCapturePaused(
-  state: DaylogUiState,
+export async function setLogbookCapturePaused(
+  state: LogbookUiState,
   client: GatewayBrowserClient | null,
   paused: boolean,
 ): Promise<void> {
@@ -223,7 +223,7 @@ export async function setDaylogCapturePaused(
   state.actionPending = true;
   notify(state);
   try {
-    state.status = await client.request<DaylogStatusPayload>("daylog.capture.set", { paused });
+    state.status = await client.request<LogbookStatusPayload>("logbook.capture.set", { paused });
   } catch (err) {
     state.error = err instanceof Error ? err.message : String(err);
   } finally {
@@ -232,8 +232,8 @@ export async function setDaylogCapturePaused(
   }
 }
 
-export async function runDaylogAnalysisNow(
-  state: DaylogUiState,
+export async function runLogbookAnalysisNow(
+  state: LogbookUiState,
   client: GatewayBrowserClient | null,
 ): Promise<void> {
   if (!client || state.actionPending) {
@@ -243,7 +243,7 @@ export async function runDaylogAnalysisNow(
   notify(state);
   try {
     const result = await client.request<{ started: boolean; reason?: string }>(
-      "daylog.analyze.now",
+      "logbook.analyze.now",
       {},
     );
     if (!result.started && result.reason) {
@@ -254,12 +254,12 @@ export async function runDaylogAnalysisNow(
   } finally {
     state.actionPending = false;
     notify(state);
-    void loadDaylog(state, client, { silent: true });
+    void loadLogbook(state, client, { silent: true });
   }
 }
 
-export async function loadDaylogStandup(
-  state: DaylogUiState,
+export async function loadLogbookStandup(
+  state: LogbookUiState,
   client: GatewayBrowserClient | null,
   refresh: boolean,
 ): Promise<void> {
@@ -270,7 +270,7 @@ export async function loadDaylogStandup(
   notify(state);
   try {
     state.standup = await client.request<{ day: string; text: string; updatedMs: number }>(
-      "daylog.standup",
+      "logbook.standup",
       { day: state.day, refresh },
     );
   } catch (err) {
@@ -281,8 +281,8 @@ export async function loadDaylogStandup(
   }
 }
 
-export async function askDaylog(
-  state: DaylogUiState,
+export async function askLogbook(
+  state: LogbookUiState,
   client: GatewayBrowserClient | null,
 ): Promise<void> {
   const question = state.askQuestion.trim();
@@ -293,7 +293,7 @@ export async function askDaylog(
   state.askAnswer = null;
   notify(state);
   try {
-    const payload = await client.request<{ answer: string }>("daylog.ask", {
+    const payload = await client.request<{ answer: string }>("logbook.ask", {
       day: state.day,
       question,
     });

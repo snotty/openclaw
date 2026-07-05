@@ -1,6 +1,6 @@
-// Daylog prompt builders. Two-stage pipeline (observe frames, then revise
+// Logbook prompt builders. Two-stage pipeline (observe frames, then revise
 // timeline cards) adapted from the approach popularized by Dayflow (MIT).
-import type { DaylogCard, DaylogObservation } from "./types.js";
+import type { LogbookCard, LogbookObservation } from "./types.js";
 
 export const CARD_MIN_MINUTES = 10;
 export const CARD_MAX_MINUTES = 60;
@@ -75,8 +75,8 @@ export function buildObservationInstructions(params: {
 
 export function buildCardsPrompt(params: {
   day: string;
-  observations: DaylogObservation[];
-  previousCards: DaylogCard[];
+  observations: LogbookObservation[];
+  previousCards: LogbookCard[];
   windowStartMs: number;
   windowEndMs: number;
 }): string {
@@ -155,10 +155,10 @@ export function buildCardsCorrectionPrompt(validationError: string): string {
 
 export function buildStandupPrompt(params: {
   day: string;
-  cards: DaylogCard[];
-  previousDayCards: DaylogCard[];
+  cards: LogbookCard[];
+  previousDayCards: LogbookCard[];
 }): string {
-  const render = (cards: DaylogCard[]) =>
+  const render = (cards: LogbookCard[]) =>
     cards
       .map(
         (card) =>
@@ -181,8 +181,8 @@ export function buildStandupPrompt(params: {
 
 export function buildAskPrompt(params: {
   day: string;
-  cards: DaylogCard[];
-  observations: DaylogObservation[];
+  cards: LogbookCard[];
+  observations: LogbookObservation[];
   question: string;
 }): string {
   const cards = params.cards

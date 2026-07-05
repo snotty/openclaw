@@ -1,6 +1,6 @@
-// Daylog node-host command: screen capture for headless node hosts (macOS).
+// Logbook node-host command: screen capture for headless node hosts (macOS).
 // Nodes without the OpenClaw app (plain `openclaw node host run`) advertise
-// daylog.snapshot so capture works anywhere the plugin is enabled.
+// logbook.snapshot so capture works anywhere the plugin is enabled.
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
@@ -10,15 +10,15 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export type DaylogSnapshotParams = {
+export type LogbookSnapshotParams = {
   screenIndex?: number;
   maxWidth?: number;
   quality?: number;
 };
 
-export type DaylogSnapshotPayload = { format: "jpeg"; base64: string } | { error: string };
+export type LogbookSnapshotPayload = { format: "jpeg"; base64: string } | { error: string };
 
-function readParams(value: unknown): DaylogSnapshotParams {
+function readParams(value: unknown): LogbookSnapshotParams {
   if (!value || typeof value !== "object") {
     return {};
   }
@@ -30,9 +30,9 @@ function readParams(value: unknown): DaylogSnapshotParams {
   return { screenIndex: num("screenIndex"), maxWidth: num("maxWidth"), quality: num("quality") };
 }
 
-export async function handleDaylogSnapshot(rawParams: unknown): Promise<DaylogSnapshotPayload> {
+export async function handleLogbookSnapshot(rawParams: unknown): Promise<LogbookSnapshotPayload> {
   if (process.platform !== "darwin") {
-    return { error: `daylog.snapshot is not supported on ${process.platform}` };
+    return { error: `logbook.snapshot is not supported on ${process.platform}` };
   }
   const params = readParams(rawParams);
   const screenIndex = Math.max(0, Math.round(params.screenIndex ?? 0));
@@ -46,7 +46,7 @@ export async function handleDaylogSnapshot(rawParams: unknown): Promise<DaylogSn
       ),
     ),
   );
-  const filePath = path.join(tmpdir(), `daylog-snapshot-${randomUUID()}.jpg`);
+  const filePath = path.join(tmpdir(), `logbook-snapshot-${randomUUID()}.jpg`);
   try {
     // -x: no capture sound; -C: include cursor; -D is 1-based display index.
     await execFileAsync("screencapture", [

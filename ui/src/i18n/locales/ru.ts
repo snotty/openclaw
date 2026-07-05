@@ -426,12 +426,12 @@ export const ru: TranslationMap = {
     debug: "Отладка",
     logs: "Журналы",
     dreams: "Сновидения",
-    daylog: "Daylog",
+    logbook: "Logbook",
   },
   subtitles: {
     agents: "Рабочие пространства, инструменты, идентификаторы.",
     activity: "Сводки активности инструментов в локальном браузере.",
-    daylog: "Your day as a timeline, built from screen snapshots.",
+    logbook: "Your day as a timeline, built from screen snapshots.",
     overview: "Состояние, точки входа, работоспособность.",
     workboard: "Очередь задач агента и передача сеанса.",
     channels: "Каналы и настройки.",
@@ -514,9 +514,9 @@ export const ru: TranslationMap = {
     truncated: "Вывод лога усечен; показан последний фрагмент.",
     empty: "Нет записей в логе.",
   },
-  daylog: {
-    disabledHelpStart: "Daylog is disabled. Enable",
-    enableConfigKey: "plugins.entries.daylog.enabled = true",
+  logbook: {
+    disabledHelpStart: "Logbook is disabled. Enable",
+    enableConfigKey: "plugins.entries.logbook.enabled = true",
     disabledHelpEnd:
       ", pair a node with screen access (for example the OpenClaw Mac app), then reload this tab.",
     duration: {
@@ -540,7 +540,7 @@ export const ru: TranslationMap = {
       batchError: "Analysis error",
       modelMissing: "No vision model",
       modelMissingHelp:
-        "Set plugins.entries.daylog.config.visionModel or configure tools.media models.",
+        "Set plugins.entries.logbook.config.visionModel (for example codex/gpt-5.5) or configure tools.media models.",
     },
     actions: {
       pause: "Pause",
@@ -550,7 +550,7 @@ export const ru: TranslationMap = {
     empty: {
       title: "Nothing on the timeline yet.",
       subtitle:
-        "Daylog is collecting snapshots; cards appear after the first analysis batch completes.",
+        "Logbook is collecting snapshots; cards appear after the first analysis batch completes.",
     },
     card: {
       keyframeAlt: "Screen snapshot from this activity",

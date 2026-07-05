@@ -2,12 +2,12 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync, mkdirSync } from "node:
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DaylogStore, dayKeyFor } from "./store.js";
-import type { DaylogCardDraft } from "./types.js";
+import { LogbookStore, dayKeyFor } from "./store.js";
+import type { LogbookCardDraft } from "./types.js";
 
 const DAY = "2026-07-03";
 
-function draft(overrides: Partial<DaylogCardDraft> = {}): DaylogCardDraft {
+function draft(overrides: Partial<LogbookCardDraft> = {}): LogbookCardDraft {
   const base = new Date(`${DAY}T10:00:00`).getTime();
   return {
     day: DAY,
@@ -25,13 +25,13 @@ function draft(overrides: Partial<DaylogCardDraft> = {}): DaylogCardDraft {
   };
 }
 
-describe("DaylogStore", () => {
+describe("LogbookStore", () => {
   let dir: string;
-  let store: DaylogStore;
+  let store: LogbookStore;
 
   beforeEach(() => {
-    dir = mkdtempSync(path.join(tmpdir(), "daylog-store-"));
-    store = new DaylogStore(dir);
+    dir = mkdtempSync(path.join(tmpdir(), "logbook-store-"));
+    store = new LogbookStore(dir);
   });
 
   afterEach(() => {

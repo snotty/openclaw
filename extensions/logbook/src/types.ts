@@ -1,6 +1,6 @@
-// Shared Daylog domain shapes used by the store, pipeline, and gateway methods.
+// Shared Logbook domain shapes used by the store, pipeline, and gateway methods.
 
-export type DaylogFrame = {
+export type LogbookFrame = {
   id: number;
   capturedAtMs: number;
   day: string;
@@ -12,20 +12,20 @@ export type DaylogFrame = {
   idle: boolean;
 };
 
-export type DaylogBatchStatus = "pending" | "running" | "done" | "error";
+export type LogbookBatchStatus = "pending" | "running" | "done" | "error";
 
-export type DaylogBatch = {
+export type LogbookBatch = {
   id: number;
   day: string;
   startMs: number;
   endMs: number;
-  status: DaylogBatchStatus;
+  status: LogbookBatchStatus;
   error?: string;
   frameCount: number;
   model?: string;
 };
 
-export type DaylogObservation = {
+export type LogbookObservation = {
   id: number;
   batchId: number;
   day: string;
@@ -34,13 +34,13 @@ export type DaylogObservation = {
   text: string;
 };
 
-export type DaylogDistraction = {
+export type LogbookDistraction = {
   startMs: number;
   endMs: number;
   title: string;
 };
 
-export type DaylogCard = {
+export type LogbookCard = {
   id: number;
   day: string;
   startMs: number;
@@ -51,13 +51,13 @@ export type DaylogCard = {
   category: string;
   appPrimary?: string;
   appSecondary?: string;
-  distractions: DaylogDistraction[];
+  distractions: LogbookDistraction[];
   keyframeId?: number;
 };
 
-export type DaylogCardDraft = Omit<DaylogCard, "id">;
+export type LogbookCardDraft = Omit<LogbookCard, "id">;
 
-export type DaylogDayStats = {
+export type LogbookDayStats = {
   trackedMs: number;
   distractionMs: number;
   categories: Array<{ category: string; ms: number }>;

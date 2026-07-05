@@ -1,4 +1,4 @@
-// Daylog background service: snapshot capture loop, batch analysis, retention.
+// Logbook background service: snapshot capture loop, batch analysis, retention.
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -18,7 +18,7 @@ import {
   selectBatchFrames,
   validateCardCoverage,
 } from "./analyze.js";
-import { parseModelRef, type DaylogConfig } from "./config.js";
+import { parseModelRef, type LogbookConfig } from "./config.js";
 import {
   buildAskPrompt,
   buildCardsCorrectionPrompt,
@@ -27,8 +27,8 @@ import {
   buildStandupPrompt,
   OBSERVATION_JSON_SCHEMA,
 } from "./prompts.js";
-import { dayKeyFor, DaylogStore } from "./store.js";
-import type { DaylogBatch, DaylogCard } from "./types.js";
+import { dayKeyFor, LogbookStore } from "./store.js";
+import type { LogbookBatch, LogbookCard } from "./types.js";
 
 const ANALYSIS_TICK_MS = 60 * 1000;
 const PRUNE_TICK_MS = 60 * 60 * 1000;
@@ -65,9 +65,9 @@ function unwrapInvokePayload(raw: unknown): SnapshotPayload | null {
 }
 
 /** Capture commands in preference order: app nodes first, headless node hosts second. */
-const CAPTURE_COMMANDS = ["screen.snapshot", "daylog.snapshot"] as const;
+const CAPTURE_COMMANDS = ["screen.snapshot", "logbook.snapshot"] as const;
 
-export type DaylogStatus = {
+export type LogbookStatus = {
   captureEnabled: boolean;
   capturePaused: boolean;
   captureIntervalSeconds: number;
@@ -79,7 +79,7 @@ export type DaylogStatus = {
   lastCaptureError?: string;
   pendingFrames: number;
   analysisRunning: boolean;
-  lastBatch?: Pick<DaylogBatch, "id" | "day" | "status" | "endMs" | "error">;
+  lastBatch?: Pick<LogbookBatch, "id" | "day" | "status" | "endMs" | "error">;
   visionModel?: string;
   visionModelSource: "config" | "media-defaults" | "missing";
   today: string;
@@ -87,8 +87,8 @@ export type DaylogStatus = {
   dataDir: string;
 };
 
-export class DaylogService {
-  private store: DaylogStore | null = null;
+export class LogbookService {
+  private store: LogbookStore | null = null;
   private captureTimer: NodeJS.Timeout | null = null;
   private analysisTimer: NodeJS.Timeout | null = null;
   private pruneTimer: NodeJS.Timeout | null = null;
@@ -102,7 +102,7 @@ export class DaylogService {
   private cachedNode: { nodeId: string; displayName?: string; command: string } | null = null;
 
   constructor(
-    private readonly config: DaylogConfig,
+    private readonly config: LogbookConfig,
     private readonly deps: {
       runtime: NonNullable<OpenClawPluginApi["runtime"]>;
       fullConfig: OpenClawConfig;
@@ -112,7 +112,7 @@ export class DaylogService {
   ) {}
 
   start(): void {
-    this.store = new DaylogStore(this.deps.dataDir);
+    this.store = new LogbookStore(this.deps.dataDir);
     // Batches interrupted by a gateway restart go back to pending.
     this.store.resetRunningBatches();
     this.captureTimer = setInterval(() => {
@@ -129,7 +129,7 @@ export class DaylogService {
     this.pruneTimer.unref?.();
     this.prune();
     this.deps.logger.info(
-      `daylog: started (capture every ${this.config.captureIntervalSeconds}s, analysis window ${this.config.analysisIntervalMinutes}m, data ${this.deps.dataDir})`,
+      `logbook: started (capture every ${this.config.captureIntervalSeconds}s, analysis window ${this.config.analysisIntervalMinutes}m, data ${this.deps.dataDir})`,
     );
   }
 
@@ -146,9 +146,9 @@ export class DaylogService {
     this.store = null;
   }
 
-  private requireStore(): DaylogStore {
+  private requireStore(): LogbookStore {
     if (!this.store) {
-      throw new Error("Daylog service is not running");
+      throw new Error("Logbook service is not running");
     }
     return this.store;
   }
@@ -212,7 +212,7 @@ export class DaylogService {
       const resolved = await this.resolveNode();
       if ("reason" in resolved) {
         if (this.lastCaptureError !== resolved.reason) {
-          this.deps.logger.warn(`daylog: ${resolved.reason}`);
+          this.deps.logger.warn(`logbook: ${resolved.reason}`);
         }
         this.lastCaptureError = resolved.reason;
         return;
@@ -268,7 +268,7 @@ export class DaylogService {
       if (this.captureFailures >= CAPTURE_FAILURE_THRESHOLD) {
         this.captureBackoffTicks = CAPTURE_FAILURE_PAUSE_TICKS;
         this.deps.logger.warn(
-          `daylog: capture failing (${this.lastCaptureError}); backing off for ${CAPTURE_FAILURE_PAUSE_TICKS} ticks`,
+          `logbook: capture failing (${this.lastCaptureError}); backing off for ${CAPTURE_FAILURE_PAUSE_TICKS} ticks`,
         );
       }
     } finally {
@@ -280,7 +280,7 @@ export class DaylogService {
 
   private resolveVisionModel(): {
     ref?: { provider: string; model: string; profile?: string; preferredProfile?: string };
-    source: DaylogStatus["visionModelSource"];
+    source: LogbookStatus["visionModelSource"];
   } {
     if (this.config.visionModel) {
       const ref = parseModelRef(this.config.visionModel);
@@ -297,7 +297,7 @@ export class DaylogService {
       if (usable) {
         return {
           // Auth profile fields ride along so profile-scoped media credentials
-          // keep working when Daylog borrows the media-understanding default.
+          // keep working when Logbook borrows the media-understanding default.
           ref: {
             provider: entry.provider as string,
             model: entry.model as string,
@@ -353,7 +353,7 @@ export class DaylogService {
         await this.runBatch(batch);
       }
     } catch (err) {
-      this.deps.logger.error(`daylog: analysis tick failed: ${String(err)}`);
+      this.deps.logger.error(`logbook: analysis tick failed: ${String(err)}`);
     } finally {
       this.analysisInFlight = false;
     }
@@ -382,14 +382,14 @@ export class DaylogService {
     }
   }
 
-  private async runBatch(batch: DaylogBatch): Promise<void> {
+  private async runBatch(batch: LogbookBatch): Promise<void> {
     const store = this.requireStore();
     const vision = this.resolveVisionModel();
     if (!vision.ref) {
       store.setBatchStatus(
         batch.id,
         "error",
-        "no vision model: set plugins.entries.daylog.config.visionModel or configure tools.media",
+        "no vision model: set plugins.entries.logbook.config.visionModel or configure tools.media",
       );
       return;
     }
@@ -420,7 +420,7 @@ export class DaylogService {
             startMs: batch.startMs,
             endMs: batch.endMs,
           }),
-          schemaName: "daylog.observations",
+          schemaName: "logbook.observations",
           jsonSchema: OBSERVATION_JSON_SCHEMA,
           cfg: this.deps.fullConfig,
           timeoutMs: 180_000,
@@ -441,11 +441,11 @@ export class DaylogService {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       store.setBatchStatus(batch.id, "error", message);
-      this.deps.logger.warn(`daylog: batch ${batch.id} failed: ${message}`);
+      this.deps.logger.warn(`logbook: batch ${batch.id} failed: ${message}`);
     }
   }
 
-  private async reviseCards(batch: DaylogBatch): Promise<void> {
+  private async reviseCards(batch: LogbookBatch): Promise<void> {
     const store = this.requireStore();
     const lookbackStart = batch.startMs - CARD_LOOKBACK_MS;
     const previousCards = store
@@ -494,7 +494,7 @@ export class DaylogService {
     };
     const first = await this.deps.runtime.llm.complete({
       messages: [{ role: "user", content: prompt }],
-      purpose: "daylog.cards",
+      purpose: "logbook.cards",
       maxTokens: 4000,
     });
     let parsed = evaluate(first.text);
@@ -505,7 +505,7 @@ export class DaylogService {
           { role: "assistant", content: first.text },
           { role: "user", content: buildCardsCorrectionPrompt(parsed.error) },
         ],
-        purpose: "daylog.cards.repair",
+        purpose: "logbook.cards.repair",
         maxTokens: 4000,
       });
       parsed = evaluate(retry.text);
@@ -548,7 +548,7 @@ export class DaylogService {
           }),
         },
       ],
-      purpose: "daylog.standup",
+      purpose: "logbook.standup",
       maxTokens: 800,
     });
     store.saveStandup(day, result.text.trim());
@@ -574,7 +574,7 @@ export class DaylogService {
           }),
         },
       ],
-      purpose: "daylog.ask",
+      purpose: "logbook.ask",
       maxTokens: 600,
     });
     return result.text.trim();
@@ -582,27 +582,27 @@ export class DaylogService {
 
   // ── Introspection ──────────────────────────────────────────────────
 
-  cardsForDay(day: string): DaylogCard[] {
+  cardsForDay(day: string): LogbookCard[] {
     return this.requireStore().cardsForDay(day);
   }
 
-  listDays(): ReturnType<DaylogStore["listDays"]> {
+  listDays(): ReturnType<LogbookStore["listDays"]> {
     return this.requireStore().listDays();
   }
 
-  dayStats(day: string): ReturnType<DaylogStore["dayStats"]> {
+  dayStats(day: string): ReturnType<LogbookStore["dayStats"]> {
     return this.requireStore().dayStats(day);
   }
 
-  frameById(id: number): ReturnType<DaylogStore["frameById"]> {
+  frameById(id: number): ReturnType<LogbookStore["frameById"]> {
     return this.requireStore().frameById(id);
   }
 
-  framesInRange(startMs: number, endMs: number): ReturnType<DaylogStore["framesInRange"]> {
+  framesInRange(startMs: number, endMs: number): ReturnType<LogbookStore["framesInRange"]> {
     return this.requireStore().framesInRange(startMs, endMs);
   }
 
-  status(): DaylogStatus {
+  status(): LogbookStatus {
     const store = this.requireStore();
     const today = dayKeyFor(Date.now());
     const latestBatch = store.latestBatch();
@@ -644,7 +644,7 @@ export class DaylogService {
     const removed = this.store.pruneFrames(cutoff);
     if (removed > 0) {
       this.deps.logger.info(
-        `daylog: pruned ${removed} frames older than ${this.config.retentionDays}d`,
+        `logbook: pruned ${removed} frames older than ${this.config.retentionDays}d`,
       );
     }
   }

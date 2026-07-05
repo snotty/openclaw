@@ -71,7 +71,7 @@ describe("parseCardsJson", () => {
     startTime: "10:00:00",
     endTime: "10:30:00",
     category: "coding",
-    title: "Working on daylog store",
+    title: "Working on logbook store",
     summary: "Implemented SQLite store",
     detailedSummary: "Added frames and cards tables.",
     distractions: [],
