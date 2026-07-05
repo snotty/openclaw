@@ -165,6 +165,15 @@ export async function loadLogbook(
   }
 }
 
+/** Stops background polling; wired into tab-switch and disconnect cleanup. */
+export function stopLogbookPolling(host: object): void {
+  const state = logbookStates.get(host);
+  if (state?.pollTimer) {
+    clearInterval(state.pollTimer);
+    state.pollTimer = null;
+  }
+}
+
 export function configureLogbookPolling(
   state: LogbookUiState,
   client: GatewayBrowserClient | null,

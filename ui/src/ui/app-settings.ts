@@ -49,6 +49,7 @@ import {
   type DreamingState,
 } from "./controllers/dreaming.ts";
 import { loadExecApprovals, type ExecApprovalsState } from "./controllers/exec-approvals.ts";
+import { stopLogbookPolling } from "./controllers/logbook.ts";
 import { loadLogs, type LogsState } from "./controllers/logs.ts";
 import {
   loadModelAuthStatusState,
@@ -740,6 +741,9 @@ function applyTabSelection(
     stopWorkboardLifecycleRefresh(
       host as unknown as Parameters<typeof stopWorkboardLifecycleRefresh>[0],
     );
+  }
+  if (next !== "logbook") {
+    stopLogbookPolling(host as unknown as Parameters<typeof stopLogbookPolling>[0]);
   }
 
   if (options.refreshPolicy === "always" || host.connected) {
