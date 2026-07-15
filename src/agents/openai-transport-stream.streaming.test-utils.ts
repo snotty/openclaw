@@ -1529,6 +1529,118 @@ describe("openai transport stream", () => {
     expect(events.filter((event) => event.type === "toolcall_end")).toHaveLength(0);
   });
 
+  it("reconciles a sparse Copilot tool stream from the completed response snapshot", async () => {
+    const model = createAzureResponsesModel();
+    const output = createResponsesAssistantOutput(model);
+    const events: CapturedStreamEvent[] = [];
+    const completedItem = {
+      type: "function_call",
+      id: "fc_sparse_read_completed",
+      call_id: "call_sparse_read",
+      name: "read",
+      arguments: '{"path":"README.md"}',
+      status: "completed",
+    };
+
+    await testing.processResponsesStream(
+      streamChunks([
+        {
+          type: "response.output_item.added",
+          output_index: 1,
+          item: {
+            ...completedItem,
+            id: "fc_sparse_read_opening",
+            arguments: "",
+            status: "in_progress",
+          },
+        },
+        {
+          type: "response.completed",
+          response: {
+            id: "resp_sparse_tool",
+            status: "completed",
+            output: [{ type: "reasoning", id: "rs_sparse", summary: [] }, completedItem],
+          },
+        },
+      ]),
+      output,
+      { push: (event) => events.push(event as CapturedStreamEvent) },
+      model,
+    );
+
+    expect(output.stopReason).toBe("toolUse");
+    expect(output.content).toEqual([
+      {
+        type: "toolCall",
+        id: "call_sparse_read|fc_sparse_read_completed",
+        name: "read",
+        arguments: { path: "README.md" },
+        partialJson: '{"path":"README.md"}',
+      },
+    ]);
+    expect(events.filter((event) => event.type === "toolcall_start")).toHaveLength(1);
+    expect(events.filter((event) => event.type === "toolcall_end")).toHaveLength(1);
+  });
+
+  it("keeps sparse tool streams fail-closed when the completed snapshot lacks arguments", async () => {
+    const model = createAzureResponsesModel();
+    const output = createResponsesAssistantOutput(model);
+    const item = {
+      type: "function_call",
+      id: "fc_sparse_incomplete",
+      call_id: "call_sparse_incomplete",
+      name: "read",
+      status: "in_progress",
+    };
+
+    await expect(
+      testing.processResponsesStream(
+        streamChunks([
+          { type: "response.output_item.added", output_index: 0, item },
+          {
+            type: "response.completed",
+            response: { id: "resp_sparse_incomplete", status: "completed", output: [item] },
+          },
+        ]),
+        output,
+        { push: vi.fn() },
+        model,
+      ),
+    ).rejects.toThrow("Responses stream completed with unresolved tool calls");
+  });
+
+  it("keeps sparse tool streams fail-closed when completed arguments are malformed", async () => {
+    const model = createAzureResponsesModel();
+    const output = createResponsesAssistantOutput(model);
+    const openingItem = {
+      type: "function_call",
+      id: "fc_sparse_malformed",
+      call_id: "call_sparse_malformed",
+      name: "read",
+      arguments: "",
+      status: "in_progress",
+    };
+
+    await expect(
+      testing.processResponsesStream(
+        streamChunks([
+          { type: "response.output_item.added", output_index: 0, item: openingItem },
+          {
+            type: "response.completed",
+            response: {
+              id: "resp_sparse_malformed",
+              status: "completed",
+              output: [{ ...openingItem, arguments: '{"path":' }],
+            },
+          },
+        ]),
+        output,
+        { push: vi.fn() },
+        model,
+      ),
+    ).rejects.toThrow("Responses stream completed with unresolved tool calls");
+  });
+
   it("recovers parallel Responses arguments from done events and preserves opening names", async () => {
     const model = createAzureResponsesModel();
     const output = createResponsesAssistantOutput(model);

@@ -1511,6 +1511,62 @@ async function processResponsesStream(
       partial: output,
     });
   };
+  const reconcileCompletedResponseToolCalls = (response: Record<string, unknown> | undefined) => {
+    if (!hasActiveStreamingToolCall() || !Array.isArray(response?.output)) {
+      return;
+    }
+    for (const [outputIndex, rawItem] of response.output.entries()) {
+      if (!isRecord(rawItem) || rawItem.type !== "function_call") {
+        continue;
+      }
+      const completedIdentity = readItemToolCallIdentity(rawItem);
+      const indexedToolCall = toolCallsByOutputIndex.get(outputIndex);
+      const streamingToolCall =
+        indexedToolCall &&
+        completedIdentity.callId &&
+        indexedToolCall.callId === completedIdentity.callId
+          ? indexedToolCall
+          : resolveStreamingToolCall({ output_index: outputIndex }, completedIdentity);
+      if (!streamingToolCall) {
+        continue;
+      }
+      const completedName = resolveCompletedToolCallName(streamingToolCall, rawItem.name);
+      const completedArguments = typeof rawItem.arguments === "string" ? rawItem.arguments : "";
+      let args: Record<string, unknown>;
+      try {
+        const parsedArguments = JSON.parse(completedArguments) as unknown;
+        if (!isRecord(parsedArguments)) {
+          continue;
+        }
+        args = parsedArguments;
+      } catch {
+        continue;
+      }
+      const provisionalId =
+        typeof streamingToolCall.block.id === "string" ? streamingToolCall.block.id : undefined;
+      const currentToolCallId = resolveToolCallId(rawItem, provisionalId);
+      streamingToolCall.block.id = currentToolCallId;
+      streamingToolCall.block.name = completedName;
+      streamingToolCall.block.arguments = args;
+      streamingToolCall.block.partialJson = completedArguments;
+      stream.push({
+        type: "toolcall_end",
+        contentIndex: streamingToolCall.contentIndex,
+        toolCall: {
+          type: "toolCall",
+          id: currentToolCallId,
+          name: completedName,
+          arguments: args,
+        },
+        partial: output,
+      });
+      forgetStreamingToolCall(streamingToolCall);
+      if (currentBlock === streamingToolCall.block) {
+        currentBlock = null;
+        currentItem = null;
+      }
+    }
+  };
   const backfillCompletedResponseOutput = (response: Record<string, unknown> | undefined) => {
     if (output.content.length > 0 || !Array.isArray(response?.output)) {
       return;
@@ -1852,10 +1908,16 @@ async function processResponsesStream(
         }
       }
     } else if (type === "response.completed") {
+      const response = event.response as Record<string, unknown> | undefined;
+      // Some Responses-compatible relays omit argument delta/done and
+      // output_item.done events, but include complete function calls in the
+      // authoritative response.completed snapshot. Reconcile only exact
+      // identity/index matches with a full arguments field; otherwise retain
+      // the fail-closed unresolved-call guard below.
+      reconcileCompletedResponseToolCalls(response);
       if (hasActiveStreamingToolCall()) {
         throw new Error("Responses stream completed with unresolved tool calls");
       }
-      const response = event.response as Record<string, unknown> | undefined;
       if (typeof response?.id === "string") {
         output.responseId = response.id;
       }
