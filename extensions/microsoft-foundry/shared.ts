@@ -320,7 +320,7 @@ function resolveFoundryReasoningEfforts(value?: string | null): string[] | undef
     return undefined;
   }
   if (normalized === "gpt-5.1-codex-max") {
-    return ["none", "medium", "high", "xhigh"];
+    return ["medium", "high", "xhigh"];
   }
   if (normalized === "gpt-5-pro") {
     return ["high"];
