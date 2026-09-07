@@ -5,7 +5,7 @@ import re
 import subprocess
 import sys
 root=Path(sys.argv[1]).resolve();out=Path(sys.argv[2]).resolve()
-HEAD='006b4ce864f1deafbf6562807841cd8c766126e3'
+HEAD='dc2e8e21343e4819830c2435946044d72040f86c'
 RED='515b7db47cbb8498f1375658d77d24facc3e2ced'
 BASE='e3e2953f4b9a3ef1cd0568763c74c42f33067410'
 def git(*args):return subprocess.check_output(['git',*args],cwd=root,text=True).strip()
@@ -22,9 +22,9 @@ files=git('diff','--name-only',RED,HEAD).splitlines()
 production=[p for p in files if p.endswith('.ts') and not p.endswith('.test.ts')]
 for path in production:
  (root/path).write_bytes(subprocess.check_output(['git','show',f'{RED}:{path}'],cwd=root))
-regressions=['src/auto-reply/reply/model-selection.test.ts','src/agents/embedded-agent-runner/run/setup.test.ts','src/agents/embedded-agent-runner/run/terminal-preparation.test.ts','src/config/sessions/context-token-provenance.test.ts']
+regressions=['src/auto-reply/reply/model-selection.test.ts','src/agents/embedded-agent-runner/run/setup.test.ts','src/agents/embedded-agent-runner/run/terminal-preparation.test.ts','src/config/sessions/context-token-provenance.test.ts','src/agents/embedded-agent-runner/run/helpers.test.ts']
 red=run('red',['node','scripts/run-vitest.mjs',regressions[0],regressions[3]])
-red_producer=run('red-producer',['node','scripts/run-vitest.mjs','--config','test/vitest/vitest.agents-embedded-agent-run.config.ts',*regressions[1:3]])
+red_producer=run('red-producer',['node','scripts/run-vitest.mjs','--config','test/vitest/vitest.agents-embedded-agent-run.config.ts',*regressions[1:3],regressions[4]])
 for path in production:
  (root/path).write_bytes(subprocess.check_output(['git','show',f'{HEAD}:{path}'],cwd=root))
 log=re.sub(r'\x1b\[[0-9;]*m','',(out/'red.log').read_text()+(out/'red-producer.log').read_text())
