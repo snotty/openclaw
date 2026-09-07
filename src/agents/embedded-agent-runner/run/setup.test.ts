@@ -486,6 +486,7 @@ describe("context producer upgrade compatibility", () => {
                   models: [
                     {
                       ...runtimeModel,
+                      api: "openai-responses",
                       contextTokens: cap,
                     },
                   ],
