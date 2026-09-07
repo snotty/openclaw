@@ -1,0 +1,55 @@
+name: Context owner supplemental proof
+on:
+  push:
+    branches: [evidence/context-pr-probes-20260907]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pr: "138087"
+            head: c06ccf0665b24353b030193d8b2006f6ec5b68fd
+          - pr: "114891"
+            head: 5f86a9affe7816f0a578ebadb51b59e0d487de49
+    env:
+      CI: "true"
+      OPENCLAW_VITEST_MAX_WORKERS: "2"
+      OPENCLAW_STATE_DIR: ${{ runner.temp }}/isolated-openclaw-state
+      HOME: ${{ runner.temp }}/isolated-home
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24.x"
+      - name: Materialize exact public candidate without credentials
+        env:
+          EXPECTED_HEAD: ${{ matrix.head }}
+        run: |
+          mkdir -p "$HOME" proof-output candidate
+          git -C candidate init
+          git -C candidate remote add origin https://github.com/openclaw/openclaw.git
+          git -C candidate fetch --depth=1 origin "$EXPECTED_HEAD"
+          git -C candidate checkout --detach FETCH_HEAD
+          test "$(git -C candidate rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git -C candidate rev-parse HEAD > proof-output/tested-head.txt
+          corepack enable
+          (cd candidate && pnpm install --frozen-lockfile) > proof-output/install.log 2>&1
+      - name: Run failing-first supplement and minimal candidate
+        env:
+          PR_NUMBER: ${{ matrix.pr }}
+        run: python3 .github/proofs/context-owner-proof.py "$PR_NUMBER" candidate proof-output
+      - name: Retain exact-head logs and suggested patch
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: context-owner-${{ matrix.pr }}-${{ matrix.head }}
+          path: proof-output/
+          if-no-files-found: error
