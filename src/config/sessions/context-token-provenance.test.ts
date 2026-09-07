@@ -132,20 +132,19 @@ describe("resolveProjectedSessionContextTokens", () => {
   });
 });
 
-it("round-trips old/new persisted rows across authored-cap changes and removal", () => {
+it("honors authored-cap changes and removal for persisted model-owned rows", () => {
   const selection = {
     provider: "fixture-provider",
     model: "fixture-model",
     agentHarnessId: "openclaw",
   };
-  const wire = {
+  const entry = {
     modelProvider: selection.provider,
     model: selection.model,
     agentHarnessId: selection.agentHarnessId,
     contextTokens: 654_321,
     contextTokensSource: "resolved-v1" as const,
   };
-  const entry = JSON.parse(JSON.stringify(wire)) as typeof wire;
   const project = (authoredContextTokens?: number) =>
     resolveProjectedSessionContextTokenBudget({
       entry,
