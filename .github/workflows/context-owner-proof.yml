@@ -20,8 +20,6 @@ jobs:
     env:
       CI: "true"
       OPENCLAW_VITEST_MAX_WORKERS: "2"
-      OPENCLAW_STATE_DIR: ${{ runner.temp }}/isolated-openclaw-state
-      HOME: ${{ runner.temp }}/isolated-home
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -32,6 +30,8 @@ jobs:
       - name: Materialize exact public candidate without credentials
         env:
           EXPECTED_HEAD: ${{ matrix.head }}
+          OPENCLAW_STATE_DIR: ${{ runner.temp }}/isolated-openclaw-state
+          HOME: ${{ runner.temp }}/isolated-home
         run: |
           mkdir -p "$HOME" proof-output candidate
           git -C candidate init
@@ -45,6 +45,8 @@ jobs:
       - name: Run failing-first supplement and minimal candidate
         env:
           PR_NUMBER: ${{ matrix.pr }}
+          OPENCLAW_STATE_DIR: ${{ runner.temp }}/isolated-openclaw-state
+          HOME: ${{ runner.temp }}/isolated-home
         run: python3 .github/proofs/context-owner-proof.py "$PR_NUMBER" candidate proof-output
       - name: Retain exact-head logs and suggested patch
         if: always()
