@@ -719,8 +719,43 @@ export function buildFoundryAuthResult(params: {
   /** Current plugins.allow so the provider can self-allowlist during onboard. */
   currentPluginsAllow?: string[];
   currentProviderProfileIds?: string[];
+  /** Existing rows are operator-owned; repeated setup does not migrate their limits. */
+  currentProviderConfig?: Pick<ModelProviderConfig, "baseUrl" | "models">;
   deployments?: FoundryDeploymentConfigInput[];
 }): ProviderAuthResult {
+  const providerConfig = buildFoundryProviderConfig(
+    params.endpoint,
+    params.modelId,
+    params.modelNameHint,
+    { api: params.api, deployments: params.deployments },
+  );
+  const current = params.currentProviderConfig;
+  if (
+    current &&
+    normalizeFoundryEndpoint(current.baseUrl) === normalizeFoundryEndpoint(params.endpoint)
+  ) {
+    const existingById = new Map(current.models.map((model) => [model.id, model]));
+    providerConfig.models = providerConfig.models.map((model) => {
+      const existing = existingById.get(model.id);
+      if (
+        !existing ||
+        normalizeFoundryEndpoint(existing.baseUrl ?? current.baseUrl) !==
+          normalizeFoundryEndpoint(model.baseUrl ?? providerConfig.baseUrl)
+      ) {
+        return model;
+      }
+      // A canonical model id says nothing about who authored a persisted cap.
+      // Retain even legacy-looking pairs; explicit operator repair owns upgrades.
+      return {
+        ...model,
+        contextWindow: existing.contextWindow,
+        maxTokens: existing.maxTokens,
+        ...(existing.contextTokens !== undefined ? { contextTokens: existing.contextTokens } : {}),
+      };
+    });
+    const discoveredIds = new Set(providerConfig.models.map((model) => model.id));
+    providerConfig.models.push(...current.models.filter((model) => !discoveredIds.has(model.id)));
+  }
   const imageDefaultPatch = buildFoundryImageDefaultPatch(params);
   const defaultModel = isSelectedMaiImageDeployment(params)
     ? undefined
@@ -754,15 +789,7 @@ export function buildFoundryAuthResult(params: {
       ...imageDefaultPatch,
       models: {
         providers: {
-          [PROVIDER_ID]: buildFoundryProviderConfig(
-            params.endpoint,
-            params.modelId,
-            params.modelNameHint,
-            {
-              api: params.api,
-              deployments: params.deployments,
-            },
-          ),
+          [PROVIDER_ID]: providerConfig,
         },
       },
       ...buildPluginsAllowPatch(params.currentPluginsAllow),

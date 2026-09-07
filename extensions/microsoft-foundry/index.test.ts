@@ -2482,3 +2482,113 @@ describe("azLoginDeviceCodeWithOptions utf-8 chunk boundary", () => {
 });
 
 /* oxlint-disable max-lines -- TODO: split this grandfathered oversized file. */
+
+describe("Foundry setup cap ownership", () => {
+  const setup = {
+    profileId: "microsoft-foundry:entra",
+    apiKey: "__entra_id_dynamic__",
+    endpoint: "https://example.services.ai.azure.com",
+    modelId: "deployment-mini",
+    modelNameHint: "gpt-5-mini",
+    api: "openai-responses" as const,
+    authMethod: "entra-id" as const,
+    deployments: [{ name: "deployment-mini", modelName: "gpt-5-mini" }],
+  };
+
+  it.each([
+    { contextWindow: 128_000, maxTokens: 16_384 },
+    { contextWindow: 80_000, contextTokens: 64_000, maxTokens: 8_192 },
+  ])("preserves persisted caps on repeated setup: %j", (limits) => {
+    const initial = requireFoundryProviderPatch(buildFoundryAuthResult(setup));
+    const existing = { ...initial, models: [{ ...initial.models[0]!, ...limits }] };
+    const before = structuredClone(existing);
+    const repeat = requireFoundryProviderPatch(
+      buildFoundryAuthResult({
+        ...setup,
+        currentProviderConfig: existing,
+      }),
+    );
+    expect(repeat.models[0]).toMatchObject(limits);
+    expect(existing).toEqual(before);
+    const twice = requireFoundryProviderPatch(
+      buildFoundryAuthResult({
+        ...setup,
+        currentProviderConfig: repeat,
+      }),
+    );
+    expect(twice.models).toEqual(repeat.models);
+  });
+
+  it("does not transfer caps to a same-name deployment in another resource", () => {
+    const initial = requireFoundryProviderPatch(buildFoundryAuthResult(setup));
+    const existing = { ...initial, models: [{ ...initial.models[0]!, contextTokens: 32_000 }] };
+    const switched = requireFoundryProviderPatch(
+      buildFoundryAuthResult({
+        ...setup,
+        endpoint: "https://other.services.ai.azure.com",
+        currentProviderConfig: existing,
+      }),
+    );
+    expect(switched.models[0]).toMatchObject({ contextWindow: 400_000, maxTokens: 128_000 });
+    expect(switched.models[0]?.contextTokens).toBeUndefined();
+  });
+
+  it("retains unselected existing deployments when refreshing the same resource", () => {
+    const initial = requireFoundryProviderPatch(buildFoundryAuthResult(setup));
+    const retained = { ...initial.models[0]!, id: "manual-unselected", contextTokens: 32_000 };
+    const repeat = requireFoundryProviderPatch(
+      buildFoundryAuthResult({
+        ...setup,
+        currentProviderConfig: { ...initial, models: [...initial.models, retained] },
+      }),
+    );
+    expect(repeat.models.find((model) => model.id === retained.id)).toEqual(retained);
+  });
+
+  it("passes existing operator caps through the API-key setup entrypoint", async () => {
+    const initial = requireFoundryProviderPatch(buildFoundryAuthResult(setup));
+    const existing = {
+      ...initial,
+      models: [
+        { ...initial.models[0]!, contextWindow: 128_000, maxTokens: 16_384, contextTokens: 64_000 },
+      ],
+    };
+    const provider = registerProvider();
+    const method = provider.auth.find((auth: { id: string }) => auth.id === "api-key");
+    const result = await method.run({
+      config: { models: { providers: { "microsoft-foundry": existing } } },
+      opts: { azureOpenaiApiKey: "test-api-key" },
+      agentDir: defaultFoundryAgentDir,
+      secretInputMode: "plaintext",
+      prompter: {
+        text: vi.fn().mockResolvedValueOnce(setup.endpoint).mockResolvedValueOnce(setup.modelId),
+        select: vi
+          .fn()
+          .mockResolvedValueOnce("other-chat")
+          .mockResolvedValueOnce("openai-responses"),
+      },
+    } as never);
+    expect(requireFoundryProviderPatch(result).models[0]).toMatchObject({
+      contextWindow: 128_000,
+      maxTokens: 16_384,
+      contextTokens: 64_000,
+    });
+  });
+
+  it("omits unsupported none from the discovered Codex Max alias", () => {
+    const result = requireFoundryProviderPatch(
+      buildFoundryAuthResult({
+        ...setup,
+        modelId: "deployment-max",
+        modelNameHint: "gpt-5.1-codex-max",
+        deployments: [{ name: "deployment-max", modelName: "gpt-5.1-codex-max" }],
+      }),
+    );
+    expect(result.models[0]?.compat?.supportedReasoningEfforts).toEqual([
+      "medium",
+      "high",
+      "xhigh",
+    ]);
+    expect(result.models[0]?.thinkingLevelMap?.off).toBe(null);
+  });
+});

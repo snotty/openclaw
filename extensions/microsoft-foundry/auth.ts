@@ -192,6 +192,7 @@ export const entraIdAuthMethod: ProviderAuthMethod = {
       ...(selectedSub?.name ? { subscriptionName: selectedSub.name } : {}),
       ...(tenantId ? { tenantId } : {}),
       currentProviderProfileIds: listConfiguredFoundryProfileIds(ctx.config),
+      currentProviderConfig: ctx.config.models?.providers?.[PROVIDER_ID],
       currentPluginsAllow: ctx.config.plugins?.allow,
       ...(discoveredDeployments ? { deployments: discoveredDeployments } : {}),
       notes: [
@@ -267,6 +268,7 @@ export const apiKeyAuthMethod: ProviderAuthMethod = {
       api: selection.api,
       authMethod: "api-key",
       currentProviderProfileIds: listConfiguredFoundryProfileIds(ctx.config),
+      currentProviderConfig: ctx.config.models?.providers?.[PROVIDER_ID],
       currentPluginsAllow: ctx.config.plugins?.allow,
       notes: [`Endpoint: ${selection.endpoint}`, `Model: ${selection.modelId}`],
     });
