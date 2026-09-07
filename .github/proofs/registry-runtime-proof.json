@@ -1,0 +1,71 @@
+{
+  "proofKind": "real imported source modules, synthetic metadata, isolated state, no provider calls",
+  "observations": [
+    {
+      "provider": "fixture-primary",
+      "model": "shared-model",
+      "native": 1000000,
+      "prompt": 872000,
+      "preReply": 872000,
+      "maintenanceBudget": 872000,
+      "maintenanceThreshold": 852000,
+      "embedded": 872000,
+      "output": 128000
+    },
+    {
+      "provider": "fixture-secondary",
+      "model": "shared-model",
+      "native": 1050000,
+      "prompt": 922000,
+      "preReply": 922000,
+      "maintenanceBudget": 922000,
+      "maintenanceThreshold": 902000,
+      "embedded": 922000,
+      "output": 128000
+    },
+    {
+      "provider": "fixture-primary",
+      "model": "shared-model",
+      "native": 1000000,
+      "prompt": 64000,
+      "preReply": 64000,
+      "maintenanceBudget": 64000,
+      "maintenanceThreshold": 44000,
+      "embedded": 64000,
+      "output": 128000
+    },
+    {
+      "provider": "fixture-secondary",
+      "model": "shared-model",
+      "native": 1050000,
+      "prompt": 922000,
+      "preReply": 922000,
+      "maintenanceBudget": 922000,
+      "maintenanceThreshold": 902000,
+      "embedded": 922000,
+      "output": 128000
+    },
+    {
+      "provider": "fixture-primary",
+      "model": "shared-model",
+      "native": 1000000,
+      "prompt": 872000,
+      "preReply": 872000,
+      "maintenanceBudget": 872000,
+      "maintenanceThreshold": 852000,
+      "embedded": 872000,
+      "output": 128000
+    },
+    {
+      "provider": "fixture-secondary",
+      "model": "shared-model",
+      "native": 1050000,
+      "prompt": 922000,
+      "preReply": 922000,
+      "maintenanceBudget": 922000,
+      "maintenanceThreshold": 902000,
+      "embedded": 922000,
+      "output": 128000
+    }
+  ]
+}
