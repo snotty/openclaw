@@ -109,8 +109,13 @@ export async function prepareEmbeddedRunRuntime(input: {
   let contextTokenBudget = initialResolvedRuntimeModel.contextTokenBudget;
   let authoredContextTokenCap = initialResolvedRuntimeModel.authoredContextTokenCap;
   let contextWindowInfo = initialResolvedRuntimeModel.contextWindowInfo;
-  let outerContextTokenMeta: { contextTokens?: number } =
-    contextTokenBudget === undefined ? {} : { contextTokens: contextTokenBudget };
+  let outerContextTokenMeta =
+    contextTokenBudget === undefined
+      ? {}
+      : {
+          contextTokens: contextTokenBudget,
+          contextTokensSource: initialResolvedRuntimeModel.contextTokensSource,
+        };
   const models: EmbeddedRunAuthState["models"] = {
     runtime: model,
     effective: initialResolvedRuntimeModel.effectiveModel,
@@ -139,7 +144,9 @@ export async function prepareEmbeddedRunRuntime(input: {
     authoredContextTokenCap = resolved.authoredContextTokenCap;
     contextWindowInfo = resolved.contextWindowInfo;
     outerContextTokenMeta =
-      contextTokenBudget === undefined ? {} : { contextTokens: contextTokenBudget };
+      contextTokenBudget === undefined
+        ? {}
+        : { contextTokens: contextTokenBudget, contextTokensSource: resolved.contextTokensSource };
   };
   const selectHarnessForModel = (
     candidate: typeof model,

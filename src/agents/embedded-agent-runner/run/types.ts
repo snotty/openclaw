@@ -402,7 +402,7 @@ export type EmbeddedRunAttemptResult = {
   /** Effective context window reported by the harness during this attempt. */
   contextTokens?: number;
   /** Whether the harness observed the window or carried prepared resolution forward. */
-  contextTokensSource?: "runtime" | "runtime-configured" | "resolved";
+  contextTokensSource?: "runtime" | "runtime-configured" | "resolved" | "resolved-v1";
   attemptUsage?: NormalizedUsage;
   promptCache?: ContextEnginePromptCacheInfo;
   contextBudgetStatus?: SessionContextBudgetStatus;
