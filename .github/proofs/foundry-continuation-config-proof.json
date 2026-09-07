@@ -1,0 +1,75 @@
+{
+  "observedAt": "2026-09-07T11:06:30.963Z",
+  "source": "real authenticated production listResourceDeployments -> canonical model -> buildFoundryAuthResult -> applyProviderAuthConfigPatch; isolated generated state only",
+  "discovery": {
+    "deploymentName": "redacted",
+    "deploymentNameEqualsCanonical": true,
+    "canonicalModel": "gpt-5-mini",
+    "version": "2025-08-07",
+    "state": "Succeeded",
+    "sku": "GlobalStandard",
+    "resourceKind": "OpenAI"
+  },
+  "documentedContract": {
+    "source": "https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure#gpt-5",
+    "native": 400000,
+    "maximumInput": 272000,
+    "maximumOutput": 128000
+  },
+  "before": {
+    "contextWindow": 128000,
+    "maxTokens": 16384
+  },
+  "freshGenerated": {
+    "contextWindow": 400000,
+    "maxTokens": 128000
+  },
+  "repeatedFresh": {
+    "contextWindow": 400000,
+    "maxTokens": 128000
+  },
+  "repeatedDeliberateCap": {
+    "contextWindow": 128000,
+    "contextTokens": 64000,
+    "maxTokens": 16384
+  },
+  "existingSelection": {
+    "contextWindow": 128000,
+    "maxTokens": 16384
+  },
+  "existingRuntimeNormalization": {
+    "contextWindow": 128000,
+    "maxTokens": 16384
+  },
+  "syntheticCustomAlias": {
+    "synthetic": true,
+    "limits": {
+      "contextWindow": 400000,
+      "maxTokens": 128000
+    }
+  },
+  "inferenceCapacityTested": false,
+  "authLoginExecuted": false,
+  "persistedOperatorStateChanged": false,
+  "limitation": "real deployment name equals canonical name; distinct custom alias is synthetic. Limits are documentation-derived configuration, not service-discovered capacities or tested million-token inference. Ambiguous existing caps intentionally remain unchanged.",
+  "sourceHead": "4b79ce2aa354010141354a0bf6f516db7ed07b4f",
+  "mainBase": "e3e2953f4b9a3ef1cd0568763c74c42f33067410",
+  "validation": {
+    "currentMainRed": {
+      "failed": 17,
+      "passed": 101
+    },
+    "incrementalCapAndReasoningRed": {
+      "failed": 4,
+      "passed": 113
+    },
+    "green": {
+      "files": 3,
+      "tests": 142
+    },
+    "changedFileGate": "passed",
+    "fullBuild": "passed",
+    "independentAutoreview": "blocked: Codex CLI not logged in; no clean verdict",
+    "sourceHashesMatchTestedBytes": true
+  }
+}
