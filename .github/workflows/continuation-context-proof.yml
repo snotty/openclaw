@@ -33,8 +33,8 @@ jobs:
           mkdir -p "$HOME" proof-output candidate
           git -C candidate init
           git -C candidate remote add origin https://github.com/snotty/openclaw.git
-          git -C candidate fetch --depth=1 origin d99c3bf970e2f4c21b29ea95b75116f08301a072 515b7db47cbb8498f1375658d77d24facc3e2ced e3e2953f4b9a3ef1cd0568763c74c42f33067410
-          git -C candidate checkout --detach d99c3bf970e2f4c21b29ea95b75116f08301a072
+          git -C candidate fetch --depth=1 origin 281a129079da2e2b5596329f5c123c4542b05d5a 515b7db47cbb8498f1375658d77d24facc3e2ced e3e2953f4b9a3ef1cd0568763c74c42f33067410
+          git -C candidate checkout --detach 281a129079da2e2b5596329f5c123c4542b05d5a
           git -C candidate update-ref refs/remotes/origin/main e3e2953f4b9a3ef1cd0568763c74c42f33067410
           corepack enable
           (cd candidate && pnpm install --frozen-lockfile) > proof-output/install.log 2>&1

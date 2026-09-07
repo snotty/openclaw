@@ -5,7 +5,7 @@ import re
 import subprocess
 import sys
 root=Path(sys.argv[1]).resolve();out=Path(sys.argv[2]).resolve()
-HEAD='d99c3bf970e2f4c21b29ea95b75116f08301a072'
+HEAD='281a129079da2e2b5596329f5c123c4542b05d5a'
 RED='515b7db47cbb8498f1375658d77d24facc3e2ced'
 BASE='e3e2953f4b9a3ef1cd0568763c74c42f33067410'
 def git(*args):return subprocess.check_output(['git',*args],cwd=root,text=True).strip()
