@@ -389,12 +389,16 @@ describe("buildErrorAgentMeta", () => {
         sessionFile: "/tmp/session-rotated.jsonl",
         provider: "anthropic",
         model: "claude-opus-4-6",
+        contextTokens: 654_321,
+        contextTokensSource: "resolved-v1",
         usageAccumulator: createUsageAccumulator(),
         lastRunPromptUsage: undefined,
       }),
     ).toMatchObject({
       sessionId: "session-rotated",
       sessionFile: "/tmp/session-rotated.jsonl",
+      contextTokens: 654_321,
+      contextTokensSource: "resolved-v1",
     });
   });
 });

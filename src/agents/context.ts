@@ -362,7 +362,7 @@ function toContextParams(context: BundledStaticCatalogContext | undefined) {
  * fallback. Best-effort by contract — any enrichment failure returns undefined
  * so callers keep their existing config/default fallback behavior.
  */
-export async function resolveBundledStaticCatalogContext(
+async function resolveBundledStaticCatalogContext(
   params: Pick<ContextTokenResolutionParams, "cfg" | "provider" | "model">,
 ): Promise<
   Pick<ContextTokenResolutionParams, "modelContextTokens" | "modelContextWindow"> | undefined
