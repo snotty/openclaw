@@ -911,6 +911,23 @@ describe("createModelSelectionState catalog loading", () => {
 });
 
 describe("resolveContextTokens", () => {
+  it.each(["shared-model", "gpt-6-astra"])(
+    "does not borrow another provider's budget before reply maintenance for %s",
+    (model) => {
+      // Synthetic metadata: the same model name is not the same provider contract.
+      const cache = getContextWindowCaches().discoveredTokenCache;
+      cache.set(model, 922_000);
+      cache.set(providerContextTokenCacheKey("fixture-secondary", model), 922_000);
+      expect(resolveContextTokens({ cfg: {}, provider: "fixture-primary", model })).toBe(200_000);
+      expect(resolveContextTokens({ cfg: {}, provider: "fixture-secondary", model })).toBe(922_000);
+      cache.set(providerContextTokenCacheKey("fixture-primary", model), 872_000);
+      expect(resolveContextTokens({ cfg: {}, provider: "fixture-primary", model })).toBe(872_000);
+      expect(resolveContextTokens({ cfg: {}, provider: "fixture-secondary", model })).toBe(922_000);
+      cache.delete(providerContextTokenCacheKey("fixture-primary", model));
+      expect(resolveContextTokens({ cfg: {}, provider: "fixture-primary", model })).toBe(200_000);
+    },
+  );
+
   it("prefers provider-qualified cache keys over bare model ids", () => {
     getContextWindowCaches().discoveredTokenCache.set("gemini-3.1-pro-preview", 200_000);
     getContextWindowCaches().discoveredTokenCache.set(

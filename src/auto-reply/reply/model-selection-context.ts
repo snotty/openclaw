@@ -18,6 +18,7 @@ export function resolveContextTokens(params: {
       modelContextWindow: params.modelContextWindow,
       modelContextTokens: params.modelContextTokens,
       allowAsyncLoad: false,
+      allowUnscopedModelLookup: false,
     }) ?? DEFAULT_CONTEXT_TOKENS
   );
 }
