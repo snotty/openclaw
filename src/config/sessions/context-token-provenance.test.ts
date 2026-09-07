@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveProjectedSessionContextTokens } from "./context-token-provenance.js";
+import {
+  resolveProjectedSessionContextTokenBudget,
+  resolveProjectedSessionContextTokens,
+} from "./context-token-provenance.js";
 
 const currentSelection = {
   provider: "openai",
@@ -127,4 +130,38 @@ describe("resolveProjectedSessionContextTokens", () => {
       }),
     ).toBeUndefined();
   });
+});
+
+it("honors authored-cap changes and removal for persisted model-owned rows", () => {
+  const selection = {
+    provider: "fixture-provider",
+    model: "fixture-model",
+    agentHarnessId: "openclaw",
+  };
+  const entry = {
+    modelProvider: selection.provider,
+    model: selection.model,
+    agentHarnessId: selection.agentHarnessId,
+    contextTokens: 654_321,
+    contextTokensSource: "resolved-v1" as const,
+  };
+  const project = (authoredContextTokens?: number) =>
+    resolveProjectedSessionContextTokenBudget({
+      entry,
+      ...selection,
+      resolvedContextTokens: 654_321,
+      resolvedContextTokensSource: "resolved-v1",
+      authoredContextTokens,
+    });
+  expect(project(64_000)).toEqual({ contextTokens: 64_000, contextTokensSource: "resolved" });
+  expect(project(96_000)).toEqual({ contextTokens: 96_000, contextTokensSource: "resolved" });
+  expect(project()).toEqual({ contextTokens: 654_321, contextTokensSource: "resolved-v1" });
+  const capped = project(64_000)!;
+  expect(
+    resolveProjectedSessionContextTokenBudget({
+      entry: { ...entry, ...capped },
+      ...selection,
+      resolvedContextTokens: undefined,
+    }),
+  ).toBeUndefined();
 });

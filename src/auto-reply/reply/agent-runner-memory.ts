@@ -13,6 +13,8 @@ import { resolveDefaultAgentId } from "../../agents/agent-scope-config.js";
 import { resolveBootstrapWarningSignaturesSeen } from "../../agents/bootstrap-budget.js";
 import { resolveCliBackendConfig } from "../../agents/cli-backends.js";
 import { estimateMessagesTokens } from "../../agents/compaction.js";
+import { resolveContextTokenBudgetForModel } from "../../agents/context.js";
+import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
 import { isBenignCompactionSkipResult } from "../../agents/embedded-agent-runner/compact-reasons.js";
 import type { AcceptedCompactionSuccessor } from "../../agents/embedded-agent-runner/compaction-successor.js";
 import { runEmbeddedAgentEntry } from "../../agents/embedded-agent-runner/run-entry.js";
@@ -83,7 +85,6 @@ import {
   shouldRunMemoryFlush,
   shouldRunPreflightCompaction,
 } from "./memory-flush.js";
-import { resolveContextTokens } from "./model-selection-context.js";
 import { readPostCompactionContext } from "./post-compaction-context.js";
 import { refreshQueuedFollowupSession, type FollowupRun } from "./queue.js";
 import { isRenderablePayload } from "./reply-payloads-base.js";
@@ -762,17 +763,22 @@ export async function runSessionCompactionIfNeeded(params: {
     params.followupRun.run.provider,
     params.followupRun.run.model ?? params.defaultModel,
   );
-  const contextWindowTokens = resolveContextTokens({
-    cfg: params.cfg,
-    provider: resolveContextConfigProviderForRuntime({
-      provider: params.followupRun.run.provider,
-      runtimeId,
-      config: params.cfg,
-    }),
-    model: params.followupRun.run.model ?? params.defaultModel,
-    modelContextWindow: catalogModel?.contextWindow,
-    modelContextTokens: catalogModel?.contextTokens,
-  });
+  const contextWindowTokens =
+    (
+      await resolveContextTokenBudgetForModel({
+        cfg: params.cfg,
+        provider: resolveContextConfigProviderForRuntime({
+          provider: params.followupRun.run.provider,
+          runtimeId,
+          config: params.cfg,
+        }),
+        model: params.followupRun.run.model ?? params.defaultModel,
+        modelContextWindow: catalogModel?.contextWindow,
+        modelContextTokens: catalogModel?.contextTokens,
+        allowAsyncLoad: false,
+        allowUnscopedModelLookup: false,
+      })
+    )?.contextTokens ?? DEFAULT_CONTEXT_TOKENS;
   const memoryFlushPlan = resolveMemoryFlushPlan({ cfg: params.cfg, contextWindowTokens });
   const reserveTokensFloor =
     memoryFlushPlan?.reserveTokensFloor ??
@@ -1307,17 +1313,22 @@ export async function runMemoryFlushIfNeeded(params: {
     params.followupRun.run.provider,
     params.followupRun.run.model ?? params.defaultModel,
   );
-  const contextWindowTokens = resolveContextTokens({
-    cfg: params.cfg,
-    provider: resolveContextConfigProviderForRuntime({
-      provider: params.followupRun.run.provider,
-      runtimeId,
-      config: params.cfg,
-    }),
-    model: params.followupRun.run.model ?? params.defaultModel,
-    modelContextWindow: catalogModel?.contextWindow,
-    modelContextTokens: catalogModel?.contextTokens,
-  });
+  const contextWindowTokens =
+    (
+      await resolveContextTokenBudgetForModel({
+        cfg: params.cfg,
+        provider: resolveContextConfigProviderForRuntime({
+          provider: params.followupRun.run.provider,
+          runtimeId,
+          config: params.cfg,
+        }),
+        model: params.followupRun.run.model ?? params.defaultModel,
+        modelContextWindow: catalogModel?.contextWindow,
+        modelContextTokens: catalogModel?.contextTokens,
+        allowAsyncLoad: false,
+        allowUnscopedModelLookup: false,
+      })
+    )?.contextTokens ?? DEFAULT_CONTEXT_TOKENS;
   let memoryFlushPlan: MemoryFlushPlan | null;
   try {
     memoryFlushPlan = resolveMemoryFlushPlan({ cfg: params.cfg, contextWindowTokens });

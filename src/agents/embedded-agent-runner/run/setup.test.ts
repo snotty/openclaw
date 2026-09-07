@@ -330,6 +330,7 @@ describe("resolveEmbeddedRuntimeModelPolicy", () => {
 
     const selected = resolve("200k");
     expect(selected.contextTokenBudget).toBe(200_000);
+    expect(selected.contextTokensSource).toBe("resolved");
     expect(selected.effectiveModel.contextWindow).toBe(200_000);
 
     const unselected = resolve(undefined);
@@ -453,5 +454,54 @@ describe("native model-owned harness policy", () => {
     });
 
     expect(result).toEqual({ effectiveModel: runtimeModel });
+  });
+});
+
+describe("context producer upgrade compatibility", () => {
+  it.each([
+    { name: "selected model", cap: undefined, expected: "resolved-v1" },
+    { name: "authored cap", cap: 64_000, expected: "resolved" },
+  ])("retains the owner of $name", ({ cap, expected }) => {
+    const runtimeModel: ProviderRuntimeModel = {
+      provider: "fixture-provider",
+      id: "fixture-model",
+      name: "Fixture",
+      api: "openai-responses",
+      baseUrl: "https://example.com/v1",
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 1_000_000,
+      contextTokens: 654_321,
+      maxTokens: 128_000,
+    };
+    const cfg: OpenClawConfig =
+      cap === undefined
+        ? {}
+        : {
+            models: {
+              providers: {
+                "fixture-provider": {
+                  baseUrl: "https://example.com/v1",
+                  models: [
+                    {
+                      ...runtimeModel,
+                      api: "openai-responses",
+                      contextTokens: cap,
+                    },
+                  ],
+                },
+              },
+            },
+          };
+    const result = resolveEmbeddedRuntimeModelPolicy({
+      cfg,
+      provider: runtimeModel.provider,
+      modelId: runtimeModel.id,
+      runtimeModel,
+      nativeModelOwned: false,
+    });
+    expect(result.contextTokenBudget).toBe(cap ?? 654_321);
+    expect(result.contextTokensSource).toBe(expected);
   });
 });

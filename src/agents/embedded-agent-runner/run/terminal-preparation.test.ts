@@ -539,7 +539,10 @@ describe("prepareEmbeddedRunTerminal run stats", () => {
     assistantProvider?: string;
     provider?: string;
     model?: string;
-    outerContextTokenMeta?: { contextTokens?: number };
+    outerContextTokenMeta?: {
+      contextTokens?: number;
+      contextTokensSource?: "resolved" | "resolved-v1";
+    };
     responseModel?: string;
     usage?: Parameters<typeof mergeUsageIntoAccumulator>[1];
     attempts?: NonNullable<Parameters<typeof mergeUsageIntoAccumulator>[1]>[];
@@ -637,6 +640,14 @@ describe("prepareEmbeddedRunTerminal run stats", () => {
     expect(configured.agentMeta).toMatchObject({
       contextTokens: 272_000,
       contextTokensSource: "runtime-configured",
+    });
+
+    const modelOwned = await prepareStats({
+      outerContextTokenMeta: { contextTokens: 654_321, contextTokensSource: "resolved-v1" },
+    });
+    expect(modelOwned.agentMeta).toMatchObject({
+      contextTokens: 654_321,
+      contextTokensSource: "resolved-v1",
     });
 
     const resolved = await prepareStats({

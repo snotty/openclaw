@@ -362,7 +362,7 @@ function toContextParams(context: BundledStaticCatalogContext | undefined) {
  * fallback. Best-effort by contract — any enrichment failure returns undefined
  * so callers keep their existing config/default fallback behavior.
  */
-export async function resolveBundledStaticCatalogContext(
+async function resolveBundledStaticCatalogContext(
   params: Pick<ContextTokenResolutionParams, "cfg" | "provider" | "model">,
 ): Promise<
   Pick<ContextTokenResolutionParams, "modelContextTokens" | "modelContextWindow"> | undefined
@@ -409,7 +409,7 @@ export async function resolveBundledStaticCatalogContext(
 }
 
 export async function resolveContextTokenBudgetForModel(
-  params: Omit<ContextTokenResolutionParams, "modelContextTokens" | "modelContextWindow">,
+  params: ContextTokenResolutionParams,
 ): Promise<ContextTokenResolution | undefined> {
   const staticCatalogContext = await resolveBundledStaticCatalogContext(params);
   const lookupOptions = {
@@ -418,7 +418,11 @@ export async function resolveContextTokenBudgetForModel(
   };
   prepareContextWindowCache(lookupOptions);
   return resolveContextTokenResolutionFromCache(
-    { ...params, ...staticCatalogContext },
+    {
+      ...params,
+      modelContextTokens: params.modelContextTokens ?? staticCatalogContext?.modelContextTokens,
+      modelContextWindow: params.modelContextWindow ?? staticCatalogContext?.modelContextWindow,
+    },
     (modelId) => lookupCachedContextTokens(modelId),
     (modelId) => lookupCachedContextWindow(modelId),
   );

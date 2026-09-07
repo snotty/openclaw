@@ -43,7 +43,10 @@ export function prepareEmbeddedRunTerminal(input: {
   authProfileId?: string;
   sessionIdUsed: string;
   sessionFileUsed?: string;
-  outerContextTokenMeta: { contextTokens?: number };
+  outerContextTokenMeta: {
+    contextTokens?: number;
+    contextTokensSource?: "resolved" | "resolved-v1";
+  };
   usageAccumulator: UsageAccumulator;
   lastRunPromptUsage?: NormalizedUsage;
   contextRecoveryState: EmbeddedRunContextRecoveryState;
@@ -114,7 +117,10 @@ export function prepareEmbeddedRunTerminal(input: {
           contextTokensSource:
             attempt.contextTokens !== undefined
               ? (attempt.contextTokensSource ?? "resolved")
-              : "resolved",
+              : reportedModelRef.provider === input.provider &&
+                  reportedModelRef.model === input.model
+                ? (input.outerContextTokenMeta.contextTokensSource ?? "resolved")
+                : "resolved",
         }
       : {}),
     agentHarnessId: attempt.agentHarnessId,

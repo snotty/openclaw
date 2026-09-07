@@ -271,6 +271,7 @@ export function resolveEmbeddedRuntimeModelPolicy(params: {
 }): {
   contextWindowInfo?: ContextWindowInfo;
   contextTokenBudget?: number;
+  contextTokensSource?: "resolved" | "resolved-v1";
   effectiveModel: ProviderRuntimeModel;
 } {
   if (params.nativeModelOwned) {
@@ -280,6 +281,10 @@ export function resolveEmbeddedRuntimeModelPolicy(params: {
   return {
     contextWindowInfo: resolved.ctxInfo,
     contextTokenBudget: resolved.ctxInfo.tokens,
+    // Only model-owned metadata is reusable after a cold upgrade. Authored
+    // configuration and session-window choices must not become sticky caps.
+    contextTokensSource:
+      resolved.ctxInfo.source === "model" && !params.contextWindow ? "resolved-v1" : "resolved",
     effectiveModel: resolved.effectiveModel,
   };
 }

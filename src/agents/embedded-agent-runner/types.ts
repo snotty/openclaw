@@ -48,7 +48,7 @@ export type EmbeddedAgentMeta = {
   provider: string;
   model: string;
   contextTokens?: number;
-  contextTokensSource?: "runtime" | "runtime-configured" | "resolved";
+  contextTokensSource?: "runtime" | "runtime-configured" | "resolved" | "resolved-v1";
   agentHarnessId?: string;
   /** Runtime-owned selection, independent of the final response or credential source. */
   runtimeModelSelection?: ModelRef;
