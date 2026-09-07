@@ -1,0 +1,491 @@
+From 281a129079da2e2b5596329f5c123c4542b05d5a Mon Sep 17 00:00:00 2001
+From: snotty <5853861+snotty@users.noreply.github.com>
+Date: Mon, 7 Sep 2026 20:11:18 +0800
+Subject: [PATCH] fix(context): preserve scoped budget ownership through cold
+ upgrades
+
+Consolidate snotty follow-ups on the main-refreshed PR138087 owner checkpoint. Preserve original contributor ancestry, modern prepared maintenance budgets, provider-scoped early lookups, exact-producer resolved-v1, deliberate model/session caps, and error provenance. Keep cold enrichment private; no unconditional network discovery or scalar-cache source guessing. Ordered owner tests and isolated SQLite-to-cold-process proof accompany the change. Recovery branch is retained; final exact-head checks/build remain required before readiness.
+---
+ src/agents/context.ts                         | 10 +++-
+ .../embedded-agent-runner/run/helpers.test.ts |  4 ++
+ .../embedded-agent-runner/run/helpers.ts      |  5 +-
+ .../run/runtime-preparation.ts                | 13 ++++-
+ .../embedded-agent-runner/run/setup.test.ts   | 50 ++++++++++++++++
+ src/agents/embedded-agent-runner/run/setup.ts |  5 ++
+ .../run/terminal-preparation.test.ts          | 13 ++++-
+ .../run/terminal-preparation.ts               | 10 +++-
+ src/agents/embedded-agent-runner/run/types.ts |  2 +-
+ src/agents/embedded-agent-runner/types.ts     |  2 +-
+ src/auto-reply/reply/agent-runner-memory.ts   | 57 +++++++++++--------
+ .../reply/model-selection-context.ts          |  1 +
+ src/auto-reply/reply/model-selection.test.ts  | 17 ++++++
+ .../sessions/context-token-provenance.test.ts | 39 ++++++++++++-
+ 14 files changed, 192 insertions(+), 36 deletions(-)
+
+diff --git a/src/agents/context.ts b/src/agents/context.ts
+index 10427399b3..4d80c8d86c 100644
+--- a/src/agents/context.ts
++++ b/src/agents/context.ts
+@@ -362,7 +362,7 @@ function toContextParams(context: BundledStaticCatalogContext | undefined) {
+  * fallback. Best-effort by contract — any enrichment failure returns undefined
+  * so callers keep their existing config/default fallback behavior.
+  */
+-export async function resolveBundledStaticCatalogContext(
++async function resolveBundledStaticCatalogContext(
+   params: Pick<ContextTokenResolutionParams, "cfg" | "provider" | "model">,
+ ): Promise<
+   Pick<ContextTokenResolutionParams, "modelContextTokens" | "modelContextWindow"> | undefined
+@@ -409,7 +409,7 @@ export async function resolveBundledStaticCatalogContext(
+ }
+ 
+ export async function resolveContextTokenBudgetForModel(
+-  params: Omit<ContextTokenResolutionParams, "modelContextTokens" | "modelContextWindow">,
++  params: ContextTokenResolutionParams,
+ ): Promise<ContextTokenResolution | undefined> {
+   const staticCatalogContext = await resolveBundledStaticCatalogContext(params);
+   const lookupOptions = {
+@@ -418,7 +418,11 @@ export async function resolveContextTokenBudgetForModel(
+   };
+   prepareContextWindowCache(lookupOptions);
+   return resolveContextTokenResolutionFromCache(
+-    { ...params, ...staticCatalogContext },
++    {
++      ...params,
++      modelContextTokens: params.modelContextTokens ?? staticCatalogContext?.modelContextTokens,
++      modelContextWindow: params.modelContextWindow ?? staticCatalogContext?.modelContextWindow,
++    },
+     (modelId) => lookupCachedContextTokens(modelId),
+     (modelId) => lookupCachedContextWindow(modelId),
+   );
+diff --git a/src/agents/embedded-agent-runner/run/helpers.test.ts b/src/agents/embedded-agent-runner/run/helpers.test.ts
+index 219dd2aea7..d2f73f7734 100644
+--- a/src/agents/embedded-agent-runner/run/helpers.test.ts
++++ b/src/agents/embedded-agent-runner/run/helpers.test.ts
+@@ -389,12 +389,16 @@ describe("buildErrorAgentMeta", () => {
+         sessionFile: "/tmp/session-rotated.jsonl",
+         provider: "anthropic",
+         model: "claude-opus-4-6",
++        contextTokens: 654_321,
++        contextTokensSource: "resolved-v1",
+         usageAccumulator: createUsageAccumulator(),
+         lastRunPromptUsage: undefined,
+       }),
+     ).toMatchObject({
+       sessionId: "session-rotated",
+       sessionFile: "/tmp/session-rotated.jsonl",
++      contextTokens: 654_321,
++      contextTokensSource: "resolved-v1",
+     });
+   });
+ });
+diff --git a/src/agents/embedded-agent-runner/run/helpers.ts b/src/agents/embedded-agent-runner/run/helpers.ts
+index 63d38e9b30..8696e7e35b 100644
+--- a/src/agents/embedded-agent-runner/run/helpers.ts
++++ b/src/agents/embedded-agent-runner/run/helpers.ts
+@@ -227,6 +227,7 @@ export function buildErrorAgentMeta(params: {
+   model: string;
+   credentialSource?: EmbeddedAgentMeta["credentialSource"];
+   contextTokens?: number;
++  contextTokensSource?: EmbeddedAgentMeta["contextTokensSource"];
+   usageAccumulator: UsageAccumulator;
+   lastRunPromptUsage: UsageSnapshot | undefined;
+   currentAttemptAssistant?: { api?: string; usage?: unknown } | null;
+@@ -243,7 +244,9 @@ export function buildErrorAgentMeta(params: {
+     model: params.model,
+     ...(params.credentialSource ? { credentialSource: params.credentialSource } : {}),
+     ...(params.contextTokens ? { contextTokens: params.contextTokens } : {}),
+-    ...(params.contextTokens ? { contextTokensSource: "resolved" as const } : {}),
++    ...(params.contextTokens
++      ? { contextTokensSource: params.contextTokensSource ?? ("resolved" as const) }
++      : {}),
+     ...(usageMeta.usage ? { usage: usageMeta.usage } : {}),
+     ...(usageMeta.lastCallUsage ? { lastCallUsage: usageMeta.lastCallUsage } : {}),
+     ...(usageMeta.promptTokens ? { promptTokens: usageMeta.promptTokens } : {}),
+diff --git a/src/agents/embedded-agent-runner/run/runtime-preparation.ts b/src/agents/embedded-agent-runner/run/runtime-preparation.ts
+index 73840c72d2..b5d3cfa9ea 100644
+--- a/src/agents/embedded-agent-runner/run/runtime-preparation.ts
++++ b/src/agents/embedded-agent-runner/run/runtime-preparation.ts
+@@ -109,8 +109,13 @@ export async function prepareEmbeddedRunRuntime(input: {
+   let contextTokenBudget = initialResolvedRuntimeModel.contextTokenBudget;
+   let authoredContextTokenCap = initialResolvedRuntimeModel.authoredContextTokenCap;
+   let contextWindowInfo = initialResolvedRuntimeModel.contextWindowInfo;
+-  let outerContextTokenMeta: { contextTokens?: number } =
+-    contextTokenBudget === undefined ? {} : { contextTokens: contextTokenBudget };
++  let outerContextTokenMeta =
++    contextTokenBudget === undefined
++      ? {}
++      : {
++          contextTokens: contextTokenBudget,
++          contextTokensSource: initialResolvedRuntimeModel.contextTokensSource,
++        };
+   const models: EmbeddedRunAuthState["models"] = {
+     runtime: model,
+     effective: initialResolvedRuntimeModel.effectiveModel,
+@@ -139,7 +144,9 @@ export async function prepareEmbeddedRunRuntime(input: {
+     authoredContextTokenCap = resolved.authoredContextTokenCap;
+     contextWindowInfo = resolved.contextWindowInfo;
+     outerContextTokenMeta =
+-      contextTokenBudget === undefined ? {} : { contextTokens: contextTokenBudget };
++      contextTokenBudget === undefined
++        ? {}
++        : { contextTokens: contextTokenBudget, contextTokensSource: resolved.contextTokensSource };
+   };
+   const selectHarnessForModel = (
+     candidate: typeof model,
+diff --git a/src/agents/embedded-agent-runner/run/setup.test.ts b/src/agents/embedded-agent-runner/run/setup.test.ts
+index d61594a2ce..6cb9c2ae23 100644
+--- a/src/agents/embedded-agent-runner/run/setup.test.ts
++++ b/src/agents/embedded-agent-runner/run/setup.test.ts
+@@ -330,6 +330,7 @@ describe("resolveEmbeddedRuntimeModelPolicy", () => {
+ 
+     const selected = resolve("200k");
+     expect(selected.contextTokenBudget).toBe(200_000);
++    expect(selected.contextTokensSource).toBe("resolved");
+     expect(selected.effectiveModel.contextWindow).toBe(200_000);
+ 
+     const unselected = resolve(undefined);
+@@ -455,3 +456,52 @@ describe("native model-owned harness policy", () => {
+     expect(result).toEqual({ effectiveModel: runtimeModel });
+   });
+ });
++
++describe("context producer upgrade compatibility", () => {
++  it.each([
++    { name: "selected model", cap: undefined, expected: "resolved-v1" },
++    { name: "authored cap", cap: 64_000, expected: "resolved" },
++  ])("retains the owner of $name", ({ cap, expected }) => {
++    const runtimeModel: ProviderRuntimeModel = {
++      provider: "fixture-provider",
++      id: "fixture-model",
++      name: "Fixture",
++      api: "openai-responses",
++      baseUrl: "https://example.com/v1",
++      reasoning: false,
++      input: ["text"],
++      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
++      contextWindow: 1_000_000,
++      contextTokens: 654_321,
++      maxTokens: 128_000,
++    };
++    const cfg: OpenClawConfig =
++      cap === undefined
++        ? {}
++        : {
++            models: {
++              providers: {
++                "fixture-provider": {
++                  baseUrl: "https://example.com/v1",
++                  models: [
++                    {
++                      ...runtimeModel,
++                      api: "openai-responses",
++                      contextTokens: cap,
++                    },
++                  ],
++                },
++              },
++            },
++          };
++    const result = resolveEmbeddedRuntimeModelPolicy({
++      cfg,
++      provider: runtimeModel.provider,
++      modelId: runtimeModel.id,
++      runtimeModel,
++      nativeModelOwned: false,
++    });
++    expect(result.contextTokenBudget).toBe(cap ?? 654_321);
++    expect(result.contextTokensSource).toBe(expected);
++  });
++});
+diff --git a/src/agents/embedded-agent-runner/run/setup.ts b/src/agents/embedded-agent-runner/run/setup.ts
+index 71fdeef72e..dea4ed7c32 100644
+--- a/src/agents/embedded-agent-runner/run/setup.ts
++++ b/src/agents/embedded-agent-runner/run/setup.ts
+@@ -271,6 +271,7 @@ export function resolveEmbeddedRuntimeModelPolicy(params: {
+ }): {
+   contextWindowInfo?: ContextWindowInfo;
+   contextTokenBudget?: number;
++  contextTokensSource?: "resolved" | "resolved-v1";
+   effectiveModel: ProviderRuntimeModel;
+ } {
+   if (params.nativeModelOwned) {
+@@ -280,6 +281,10 @@ export function resolveEmbeddedRuntimeModelPolicy(params: {
+   return {
+     contextWindowInfo: resolved.ctxInfo,
+     contextTokenBudget: resolved.ctxInfo.tokens,
++    // Only model-owned metadata is reusable after a cold upgrade. Authored
++    // configuration and session-window choices must not become sticky caps.
++    contextTokensSource:
++      resolved.ctxInfo.source === "model" && !params.contextWindow ? "resolved-v1" : "resolved",
+     effectiveModel: resolved.effectiveModel,
+   };
+ }
+diff --git a/src/agents/embedded-agent-runner/run/terminal-preparation.test.ts b/src/agents/embedded-agent-runner/run/terminal-preparation.test.ts
+index 5ba454722d..0fce02adea 100644
+--- a/src/agents/embedded-agent-runner/run/terminal-preparation.test.ts
++++ b/src/agents/embedded-agent-runner/run/terminal-preparation.test.ts
+@@ -539,7 +539,10 @@ describe("prepareEmbeddedRunTerminal run stats", () => {
+     assistantProvider?: string;
+     provider?: string;
+     model?: string;
+-    outerContextTokenMeta?: { contextTokens?: number };
++    outerContextTokenMeta?: {
++      contextTokens?: number;
++      contextTokensSource?: "resolved" | "resolved-v1";
++    };
+     responseModel?: string;
+     usage?: Parameters<typeof mergeUsageIntoAccumulator>[1];
+     attempts?: NonNullable<Parameters<typeof mergeUsageIntoAccumulator>[1]>[];
+@@ -639,6 +642,14 @@ describe("prepareEmbeddedRunTerminal run stats", () => {
+       contextTokensSource: "runtime-configured",
+     });
+ 
++    const modelOwned = await prepareStats({
++      outerContextTokenMeta: { contextTokens: 654_321, contextTokensSource: "resolved-v1" },
++    });
++    expect(modelOwned.agentMeta).toMatchObject({
++      contextTokens: 654_321,
++      contextTokensSource: "resolved-v1",
++    });
++
+     const resolved = await prepareStats({
+       outerContextTokenMeta: { contextTokens: 272_000 },
+     });
+diff --git a/src/agents/embedded-agent-runner/run/terminal-preparation.ts b/src/agents/embedded-agent-runner/run/terminal-preparation.ts
+index 89651542fd..cd2ccf6752 100644
+--- a/src/agents/embedded-agent-runner/run/terminal-preparation.ts
++++ b/src/agents/embedded-agent-runner/run/terminal-preparation.ts
+@@ -43,7 +43,10 @@ export function prepareEmbeddedRunTerminal(input: {
+   authProfileId?: string;
+   sessionIdUsed: string;
+   sessionFileUsed?: string;
+-  outerContextTokenMeta: { contextTokens?: number };
++  outerContextTokenMeta: {
++    contextTokens?: number;
++    contextTokensSource?: "resolved" | "resolved-v1";
++  };
+   usageAccumulator: UsageAccumulator;
+   lastRunPromptUsage?: NormalizedUsage;
+   contextRecoveryState: EmbeddedRunContextRecoveryState;
+@@ -114,7 +117,10 @@ export function prepareEmbeddedRunTerminal(input: {
+           contextTokensSource:
+             attempt.contextTokens !== undefined
+               ? (attempt.contextTokensSource ?? "resolved")
+-              : "resolved",
++              : reportedModelRef.provider === input.provider &&
++                  reportedModelRef.model === input.model
++                ? (input.outerContextTokenMeta.contextTokensSource ?? "resolved")
++                : "resolved",
+         }
+       : {}),
+     agentHarnessId: attempt.agentHarnessId,
+diff --git a/src/agents/embedded-agent-runner/run/types.ts b/src/agents/embedded-agent-runner/run/types.ts
+index 7216f0b48f..af9a8a8139 100644
+--- a/src/agents/embedded-agent-runner/run/types.ts
++++ b/src/agents/embedded-agent-runner/run/types.ts
+@@ -402,7 +402,7 @@ export type EmbeddedRunAttemptResult = {
+   /** Effective context window reported by the harness during this attempt. */
+   contextTokens?: number;
+   /** Whether the harness observed the window or carried prepared resolution forward. */
+-  contextTokensSource?: "runtime" | "runtime-configured" | "resolved";
++  contextTokensSource?: "runtime" | "runtime-configured" | "resolved" | "resolved-v1";
+   attemptUsage?: NormalizedUsage;
+   promptCache?: ContextEnginePromptCacheInfo;
+   contextBudgetStatus?: SessionContextBudgetStatus;
+diff --git a/src/agents/embedded-agent-runner/types.ts b/src/agents/embedded-agent-runner/types.ts
+index 772258ed20..e3bbb4c5ad 100644
+--- a/src/agents/embedded-agent-runner/types.ts
++++ b/src/agents/embedded-agent-runner/types.ts
+@@ -48,7 +48,7 @@ export type EmbeddedAgentMeta = {
+   provider: string;
+   model: string;
+   contextTokens?: number;
+-  contextTokensSource?: "runtime" | "runtime-configured" | "resolved";
++  contextTokensSource?: "runtime" | "runtime-configured" | "resolved" | "resolved-v1";
+   agentHarnessId?: string;
+   /** Runtime-owned selection, independent of the final response or credential source. */
+   runtimeModelSelection?: ModelRef;
+diff --git a/src/auto-reply/reply/agent-runner-memory.ts b/src/auto-reply/reply/agent-runner-memory.ts
+index 460ad10d1b..b290589e08 100644
+--- a/src/auto-reply/reply/agent-runner-memory.ts
++++ b/src/auto-reply/reply/agent-runner-memory.ts
+@@ -13,6 +13,8 @@ import { resolveDefaultAgentId } from "../../agents/agent-scope-config.js";
+ import { resolveBootstrapWarningSignaturesSeen } from "../../agents/bootstrap-budget.js";
+ import { resolveCliBackendConfig } from "../../agents/cli-backends.js";
+ import { estimateMessagesTokens } from "../../agents/compaction.js";
++import { resolveContextTokenBudgetForModel } from "../../agents/context.js";
++import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
+ import { isBenignCompactionSkipResult } from "../../agents/embedded-agent-runner/compact-reasons.js";
+ import type { AcceptedCompactionSuccessor } from "../../agents/embedded-agent-runner/compaction-successor.js";
+ import { runEmbeddedAgentEntry } from "../../agents/embedded-agent-runner/run-entry.js";
+@@ -83,7 +85,6 @@ import {
+   shouldRunMemoryFlush,
+   shouldRunPreflightCompaction,
+ } from "./memory-flush.js";
+-import { resolveContextTokens } from "./model-selection-context.js";
+ import { readPostCompactionContext } from "./post-compaction-context.js";
+ import { refreshQueuedFollowupSession, type FollowupRun } from "./queue.js";
+ import { isRenderablePayload } from "./reply-payloads-base.js";
+@@ -762,17 +763,22 @@ export async function runSessionCompactionIfNeeded(params: {
+     params.followupRun.run.provider,
+     params.followupRun.run.model ?? params.defaultModel,
+   );
+-  const contextWindowTokens = resolveContextTokens({
+-    cfg: params.cfg,
+-    provider: resolveContextConfigProviderForRuntime({
+-      provider: params.followupRun.run.provider,
+-      runtimeId,
+-      config: params.cfg,
+-    }),
+-    model: params.followupRun.run.model ?? params.defaultModel,
+-    modelContextWindow: catalogModel?.contextWindow,
+-    modelContextTokens: catalogModel?.contextTokens,
+-  });
++  const contextWindowTokens =
++    (
++      await resolveContextTokenBudgetForModel({
++        cfg: params.cfg,
++        provider: resolveContextConfigProviderForRuntime({
++          provider: params.followupRun.run.provider,
++          runtimeId,
++          config: params.cfg,
++        }),
++        model: params.followupRun.run.model ?? params.defaultModel,
++        modelContextWindow: catalogModel?.contextWindow,
++        modelContextTokens: catalogModel?.contextTokens,
++        allowAsyncLoad: false,
++        allowUnscopedModelLookup: false,
++      })
++    )?.contextTokens ?? DEFAULT_CONTEXT_TOKENS;
+   const memoryFlushPlan = resolveMemoryFlushPlan({ cfg: params.cfg, contextWindowTokens });
+   const reserveTokensFloor =
+     memoryFlushPlan?.reserveTokensFloor ??
+@@ -1307,17 +1313,22 @@ export async function runMemoryFlushIfNeeded(params: {
+     params.followupRun.run.provider,
+     params.followupRun.run.model ?? params.defaultModel,
+   );
+-  const contextWindowTokens = resolveContextTokens({
+-    cfg: params.cfg,
+-    provider: resolveContextConfigProviderForRuntime({
+-      provider: params.followupRun.run.provider,
+-      runtimeId,
+-      config: params.cfg,
+-    }),
+-    model: params.followupRun.run.model ?? params.defaultModel,
+-    modelContextWindow: catalogModel?.contextWindow,
+-    modelContextTokens: catalogModel?.contextTokens,
+-  });
++  const contextWindowTokens =
++    (
++      await resolveContextTokenBudgetForModel({
++        cfg: params.cfg,
++        provider: resolveContextConfigProviderForRuntime({
++          provider: params.followupRun.run.provider,
++          runtimeId,
++          config: params.cfg,
++        }),
++        model: params.followupRun.run.model ?? params.defaultModel,
++        modelContextWindow: catalogModel?.contextWindow,
++        modelContextTokens: catalogModel?.contextTokens,
++        allowAsyncLoad: false,
++        allowUnscopedModelLookup: false,
++      })
++    )?.contextTokens ?? DEFAULT_CONTEXT_TOKENS;
+   let memoryFlushPlan: MemoryFlushPlan | null;
+   try {
+     memoryFlushPlan = resolveMemoryFlushPlan({ cfg: params.cfg, contextWindowTokens });
+diff --git a/src/auto-reply/reply/model-selection-context.ts b/src/auto-reply/reply/model-selection-context.ts
+index f2e099fa0b..aae89586d2 100644
+--- a/src/auto-reply/reply/model-selection-context.ts
++++ b/src/auto-reply/reply/model-selection-context.ts
+@@ -18,6 +18,7 @@ export function resolveContextTokens(params: {
+       modelContextWindow: params.modelContextWindow,
+       modelContextTokens: params.modelContextTokens,
+       allowAsyncLoad: false,
++      allowUnscopedModelLookup: false,
+     }) ?? DEFAULT_CONTEXT_TOKENS
+   );
+ }
+diff --git a/src/auto-reply/reply/model-selection.test.ts b/src/auto-reply/reply/model-selection.test.ts
+index b9934493b5..a27fb932cb 100644
+--- a/src/auto-reply/reply/model-selection.test.ts
++++ b/src/auto-reply/reply/model-selection.test.ts
+@@ -911,6 +911,23 @@ describe("createModelSelectionState catalog loading", () => {
+ });
+ 
+ describe("resolveContextTokens", () => {
++  it.each(["shared-model", "gpt-6-astra"])(
++    "does not borrow another provider's budget before reply maintenance for %s",
++    (model) => {
++      // Synthetic metadata: the same model name is not the same provider contract.
++      const cache = getContextWindowCaches().discoveredTokenCache;
++      cache.set(model, 922_000);
++      cache.set(providerContextTokenCacheKey("fixture-secondary", model), 922_000);
++      expect(resolveContextTokens({ cfg: {}, provider: "fixture-primary", model })).toBe(200_000);
++      expect(resolveContextTokens({ cfg: {}, provider: "fixture-secondary", model })).toBe(922_000);
++      cache.set(providerContextTokenCacheKey("fixture-primary", model), 872_000);
++      expect(resolveContextTokens({ cfg: {}, provider: "fixture-primary", model })).toBe(872_000);
++      expect(resolveContextTokens({ cfg: {}, provider: "fixture-secondary", model })).toBe(922_000);
++      cache.delete(providerContextTokenCacheKey("fixture-primary", model));
++      expect(resolveContextTokens({ cfg: {}, provider: "fixture-primary", model })).toBe(200_000);
++    },
++  );
++
+   it("prefers provider-qualified cache keys over bare model ids", () => {
+     getContextWindowCaches().discoveredTokenCache.set("gemini-3.1-pro-preview", 200_000);
+     getContextWindowCaches().discoveredTokenCache.set(
+diff --git a/src/config/sessions/context-token-provenance.test.ts b/src/config/sessions/context-token-provenance.test.ts
+index e8e0b107ef..89b9a9db21 100644
+--- a/src/config/sessions/context-token-provenance.test.ts
++++ b/src/config/sessions/context-token-provenance.test.ts
+@@ -1,5 +1,8 @@
+ import { describe, expect, it } from "vitest";
+-import { resolveProjectedSessionContextTokens } from "./context-token-provenance.js";
++import {
++  resolveProjectedSessionContextTokenBudget,
++  resolveProjectedSessionContextTokens,
++} from "./context-token-provenance.js";
+ 
+ const currentSelection = {
+   provider: "openai",
+@@ -128,3 +131,37 @@ describe("resolveProjectedSessionContextTokens", () => {
+     ).toBeUndefined();
+   });
+ });
++
++it("honors authored-cap changes and removal for persisted model-owned rows", () => {
++  const selection = {
++    provider: "fixture-provider",
++    model: "fixture-model",
++    agentHarnessId: "openclaw",
++  };
++  const entry = {
++    modelProvider: selection.provider,
++    model: selection.model,
++    agentHarnessId: selection.agentHarnessId,
++    contextTokens: 654_321,
++    contextTokensSource: "resolved-v1" as const,
++  };
++  const project = (authoredContextTokens?: number) =>
++    resolveProjectedSessionContextTokenBudget({
++      entry,
++      ...selection,
++      resolvedContextTokens: 654_321,
++      resolvedContextTokensSource: "resolved-v1",
++      authoredContextTokens,
++    });
++  expect(project(64_000)).toEqual({ contextTokens: 64_000, contextTokensSource: "resolved" });
++  expect(project(96_000)).toEqual({ contextTokens: 96_000, contextTokensSource: "resolved" });
++  expect(project()).toEqual({ contextTokens: 654_321, contextTokensSource: "resolved-v1" });
++  const capped = project(64_000)!;
++  expect(
++    resolveProjectedSessionContextTokenBudget({
++      entry: { ...entry, ...capped },
++      ...selection,
++      resolvedContextTokens: undefined,
++    }),
++  ).toBeUndefined();
++});
+-- 
+2.43.0
+
