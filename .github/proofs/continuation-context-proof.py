@@ -23,11 +23,12 @@ production=[p for p in files if p.endswith('.ts') and not p.endswith('.test.ts')
 for path in production:
  (root/path).write_bytes(subprocess.check_output(['git','show',f'{RED}:{path}'],cwd=root))
 regressions=['src/auto-reply/reply/model-selection.test.ts','src/agents/embedded-agent-runner/run/setup.test.ts','src/agents/embedded-agent-runner/run/terminal-preparation.test.ts','src/config/sessions/context-token-provenance.test.ts']
-red=run('red',['node','scripts/run-vitest.mjs',*regressions])
+red=run('red',['node','scripts/run-vitest.mjs',regressions[0],regressions[3]])
+red_producer=run('red-producer',['node','scripts/run-vitest.mjs','--config','test/vitest/vitest.agents-embedded-agent-run.config.ts',*regressions[1:3]])
 for path in production:
  (root/path).write_bytes(subprocess.check_output(['git','show',f'{HEAD}:{path}'],cwd=root))
-log=re.sub(r'\x1b\[[0-9;]*m','',(out/'red.log').read_text())
-assert red!=0 and 'resolved-v1' in log and '200000' in log,'missing intended producer/scope RED failures'
+log=re.sub(r'\x1b\[[0-9;]*m','',(out/'red.log').read_text()+(out/'red-producer.log').read_text())
+assert red!=0 and red_producer!=0 and 'resolved-v1' in log and '200000' in log,'missing intended producer/scope RED failures'
 assert 'Failed Suites' not in log,'RED collection failure is not a regression proof'
 all_tests=list(dict.fromkeys(regressions+[
 'src/agents/context.test.ts','src/agents/context.opencode-go.test.ts','src/agents/command/session-store.test.ts',
@@ -41,7 +42,22 @@ all_tests=list(dict.fromkeys(regressions+[
 'src/agents/runtime-plan/credential-scoped-model.memo.test.ts',
 'src/agents/embedded-agent-runner/model.test.ts',
 ]))
-if run('green',['node','scripts/run-vitest.mjs',*all_tests]):raise RuntimeError('owner/sibling tests failed')
+def owner(path):
+ if path.startswith('src/agents/embedded-agent-runner/run/'):return 'agents-embedded-agent-run'
+ if path.startswith('src/agents/embedded-agent-runner/'):return 'agents-embedded-agent'
+ if path.startswith('src/agents/'):
+  return 'agents-core' if path.count('/')==2 else 'agents-support'
+ if path.startswith('src/cron/'):return 'cron'
+ if path.startswith('src/config/'):return 'runtime-config'
+ return 'auto-reply'
+groups={}
+for path in all_tests:groups.setdefault(owner(path),[]).append(path)
+for group,paths in groups.items():
+ label=f'green-{group}'
+ if run(label,['node','scripts/run-vitest.mjs','--config',f'test/vitest/vitest.{group}.config.ts',*paths]):raise RuntimeError(f'{group} owner/sibling tests failed')
+ log=(out/f'{label}.log').read_text()
+ for path in paths:
+  assert path in log, f'Owner routing omitted requested test {path}'
 proof=Path(__file__).with_name('context-upgrade-proof.mts').resolve()
 if run('upgrade-proof',['node','--import','./scripts/tsx.mjs',str(proof),str(root)]):raise RuntimeError('production upgrade trace failed')
 if run('changed-gates',['node','scripts/check-changed.mjs','--base',BASE]):raise RuntimeError('changed gates failed')
