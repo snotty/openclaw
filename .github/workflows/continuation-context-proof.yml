@@ -1,0 +1,52 @@
+name: Context continuation proof
+on:
+  push:
+    branches: [evidence/context-owner-patches-20260907]
+    paths:
+      [
+        .github/workflows/continuation-context-proof.yml,
+        .github/proofs/continuation-context-proof.py,
+        .github/proofs/context-upgrade-proof.mts,
+      ]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CI: "true"
+      OPENCLAW_VITEST_MAX_WORKERS: "2"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24.x"
+      - name: Pin candidate and install in secretless isolated state
+        env:
+          HOME: ${{ runner.temp }}/isolated-home
+          OPENCLAW_STATE_DIR: ${{ runner.temp }}/isolated-state
+        run: |
+          mkdir -p "$HOME" proof-output candidate
+          git -C candidate init
+          git -C candidate remote add origin https://github.com/snotty/openclaw.git
+          git -C candidate fetch --depth=1 origin 006b4ce864f1deafbf6562807841cd8c766126e3 515b7db47cbb8498f1375658d77d24facc3e2ced e3e2953f4b9a3ef1cd0568763c74c42f33067410
+          git -C candidate checkout --detach 006b4ce864f1deafbf6562807841cd8c766126e3
+          git -C candidate update-ref refs/remotes/origin/main e3e2953f4b9a3ef1cd0568763c74c42f33067410
+          corepack enable
+          (cd candidate && pnpm install --frozen-lockfile) > proof-output/install.log 2>&1
+      - name: Failing-first tests, upgrade trace, owner siblings, gates and serialized build
+        env:
+          HOME: ${{ runner.temp }}/isolated-home
+          OPENCLAW_STATE_DIR: ${{ runner.temp }}/isolated-state
+        run: python3 .github/proofs/continuation-context-proof.py candidate proof-output
+      - name: Retain exact-head output
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: context-continuation-proof
+          path: proof-output/
+          if-no-files-found: error
