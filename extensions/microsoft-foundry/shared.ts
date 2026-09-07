@@ -215,6 +215,25 @@ function supportsFoundryManualClaudeThinking(value?: string | null): boolean {
     : false;
 }
 
+// Exact documented identities, not a catch-all for future GPT variants.
+// https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure
+const FOUNDRY_GPT_400K_MODELS = new Set([
+  "gpt-5",
+  "gpt-5-mini",
+  "gpt-5-nano",
+  "gpt-5-codex",
+  "gpt-5-pro",
+  "gpt-5.1",
+  "gpt-5.1-codex",
+  "gpt-5.1-codex-mini",
+  "gpt-5.1-codex-max",
+  "gpt-5.2",
+  "gpt-5.2-codex",
+  "gpt-5.3-codex",
+  "gpt-5.4-mini",
+  "gpt-5.4-nano",
+]);
+
 function resolveFoundryOpenAIModelTokenLimits(
   normalized: string | undefined,
 ): { contextWindow: number; maxTokens: number } | undefined {
@@ -226,7 +245,7 @@ function resolveFoundryOpenAIModelTokenLimits(
   if (/^gpt-5\.(?:4(?:-pro)?|5|6(?:-(?:sol|terra|luna))?)$/u.test(normalized)) {
     return { contextWindow: 1_050_000, maxTokens: 128_000 };
   }
-  if (/^gpt-5\.4-(?:mini|nano)$/u.test(normalized)) {
+  if (FOUNDRY_GPT_400K_MODELS.has(normalized)) {
     return { contextWindow: 400_000, maxTokens: 128_000 };
   }
   return undefined;

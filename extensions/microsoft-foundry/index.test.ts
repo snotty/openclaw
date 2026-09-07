@@ -1514,6 +1514,40 @@ assert.equal(afterOldest, 130, "the evicted account must refresh through az");
     expect(normalized?.compat?.maxTokensField).toBe("max_completion_tokens");
   });
 
+  it.each(["selection", "normalization"] as const)(
+    "preserves an ambiguous manual legacy-limit pair during %s",
+    async (operation) => {
+      const provider = registerProvider();
+      const model = {
+        ...buildFoundryModel({ id: "manual-alias", name: "gpt-5.4" }),
+        // A canonical identity describes the model, not who authored its limits.
+        // Deliberately omit metadataSource, just as an ordinary manual row can.
+        params: { canonicalModelId: "gpt-5.4" },
+      };
+      const config = buildFoundryConfig({ models: [model] });
+      if (operation === "selection") {
+        await provider.onModelSelected?.({
+          config,
+          model: "microsoft-foundry/manual-alias",
+          prompter: {} as never,
+          agentDir: defaultFoundryAgentDir,
+        });
+        expect(config.models.providers["microsoft-foundry"].models[0]).toMatchObject({
+          contextWindow: 128_000,
+          maxTokens: 16_384,
+        });
+      } else {
+        const result = provider.normalizeResolvedModel?.({
+          provider: "microsoft-foundry",
+          modelId: "manual-alias",
+          model,
+        });
+        expect(result).toMatchObject({ contextWindow: 128_000, maxTokens: 16_384 });
+      }
+      expect(model).toMatchObject({ contextWindow: 128_000, maxTokens: 16_384 });
+    },
+  );
+
   it("preserves explicit image capability for non-heuristic Foundry deployments", () => {
     const provider = registerProvider();
 
@@ -1736,6 +1770,19 @@ assert.equal(afterOldest, 130, "the evicted account must refresh through az");
     ["gpt-5.4-pro", 1_050_000, 128_000],
     ["gpt-5.4-mini", 400_000, 128_000],
     ["gpt-5.4-nano", 400_000, 128_000],
+    ["gpt-5.3-codex", 400_000, 128_000],
+    ["gpt-5.2", 400_000, 128_000],
+    ["gpt-5.2-codex", 400_000, 128_000],
+    ["gpt-5.1", 400_000, 128_000],
+    ["gpt-5.1-codex", 400_000, 128_000],
+    ["gpt-5.1-codex-mini", 400_000, 128_000],
+    ["gpt-5.1-codex-max", 400_000, 128_000],
+    ["gpt-5", 400_000, 128_000],
+    ["gpt-5-mini", 400_000, 128_000],
+    ["gpt-5-nano", 400_000, 128_000],
+    ["gpt-5-codex", 400_000, 128_000],
+    ["gpt-5-pro", 400_000, 128_000],
+    ["gpt-5.99-unverified", 128_000, 16_384],
     ["gpt-5-chat", 128_000, 16_384],
     ["gpt-4o-mini", 128_000, 16_384],
   ] as const)(
@@ -1749,6 +1796,13 @@ assert.equal(afterOldest, 130, "the evicted account must refresh through az");
         modelNameHint,
         api: modelNameHint.startsWith("gpt-5") ? "openai-responses" : "openai-completions",
         authMethod: "api-key",
+        deployments: [
+          {
+            name: `prod-${modelNameHint}`,
+            modelName: modelNameHint,
+            api: modelNameHint.startsWith("gpt-5") ? "openai-responses" : "openai-completions",
+          },
+        ],
       });
 
       expect(result.configPatch?.models?.providers?.["microsoft-foundry"]?.models[0]).toMatchObject(
