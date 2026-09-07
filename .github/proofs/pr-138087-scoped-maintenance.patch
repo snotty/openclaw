@@ -1,0 +1,32 @@
+diff --git a/src/auto-reply/reply/model-selection-context.ts b/src/auto-reply/reply/model-selection-context.ts
+index f2e099fa..aae89586 100644
+--- a/src/auto-reply/reply/model-selection-context.ts
++++ b/src/auto-reply/reply/model-selection-context.ts
+@@ -18,6 +18,7 @@ export function resolveContextTokens(params: {
+       modelContextWindow: params.modelContextWindow,
+       modelContextTokens: params.modelContextTokens,
+       allowAsyncLoad: false,
++      allowUnscopedModelLookup: false,
+     }) ?? DEFAULT_CONTEXT_TOKENS
+   );
+ }
+diff --git a/src/auto-reply/reply/model-selection.test.ts b/src/auto-reply/reply/model-selection.test.ts
+index b9934493..e6b8046a 100644
+--- a/src/auto-reply/reply/model-selection.test.ts
++++ b/src/auto-reply/reply/model-selection.test.ts
+@@ -2561,3 +2561,15 @@ describe("createModelSelectionState degraded-catalog override preservation", ()
+ });
+ 
+ /* oxlint-disable max-lines -- TODO: split this grandfathered oversized file. */
++
++describe("supplemental provider-scoped maintenance", () => {
++  it.each(["shared-model", "gpt-6-astra"])("rejects a sibling provider budget for %s", (model) => {
++    const cache = getContextWindowCaches().discoveredTokenCache;
++    cache.set(model, 922_000);
++    cache.set(providerContextTokenCacheKey("fixture-secondary", model), 922_000);
++    expect(resolveContextTokens({ cfg: {}, provider: "fixture-primary", model })).toBe(200_000);
++    expect(resolveContextTokens({ cfg: {}, provider: "fixture-secondary", model })).toBe(922_000);
++    cache.set(providerContextTokenCacheKey("fixture-primary", model), 872_000);
++    expect(resolveContextTokens({ cfg: {}, provider: "fixture-primary", model })).toBe(872_000);
++  });
++});

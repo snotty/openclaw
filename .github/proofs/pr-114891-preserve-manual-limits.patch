@@ -1,0 +1,116 @@
+diff --git a/extensions/microsoft-foundry/index.test.ts b/extensions/microsoft-foundry/index.test.ts
+index 40ed96be..6acffbaa 100644
+--- a/extensions/microsoft-foundry/index.test.ts
++++ b/extensions/microsoft-foundry/index.test.ts
+@@ -756,8 +756,8 @@ describe("microsoft-foundry plugin", () => {
+       "image",
+     ]);
+     expect(config.models?.providers?.["microsoft-foundry"]?.models[0]).toMatchObject({
+-      contextWindow: 1_050_000,
+-      maxTokens: 128_000,
++      contextWindow: 128_000,
++      maxTokens: 16_384,
+     });
+     expect(config.models?.providers?.["microsoft-foundry"]?.models[1]).toMatchObject({
+       contextWindow: 128_000,
+@@ -1273,8 +1273,8 @@ describe("microsoft-foundry plugin", () => {
+     expect(normalized?.compat?.supportsStore).toBe(false);
+     expect(normalized?.compat?.supportsStrictMode).toBe(false);
+     expect(normalized?.compat?.maxTokensField).toBe("max_completion_tokens");
+-    expect(normalized?.contextWindow).toBe(1_050_000);
+-    expect(normalized?.maxTokens).toBe(128_000);
++    expect(normalized?.contextWindow).toBe(128_000);
++    expect(normalized?.maxTokens).toBe(16_384);
+   });
+ 
+   it("preserves explicit limits when normalizing an existing Foundry deployment", () => {
+@@ -2242,3 +2242,37 @@ describe("azLoginDeviceCodeWithOptions utf-8 chunk boundary", () => {
+ });
+ 
+ /* oxlint-disable max-lines -- TODO: split this grandfathered oversized file. */
++
++describe("supplemental ambiguous manual limits", () => {
++  it.each(["selection", "normalization"] as const)(
++    "preserves manual limits during %s",
++    async (operation) => {
++      const provider = registerProvider();
++      const model = {
++        ...buildFoundryModel({ id: "manual-alias", name: "gpt-5.4" }),
++        params: { canonicalModelId: "gpt-5.4" },
++      };
++      const config = buildFoundryConfig({ models: [model] });
++      if (operation === "selection") {
++        await provider.onModelSelected?.({
++          config,
++          model: "microsoft-foundry/manual-alias",
++          prompter: {} as never,
++          agentDir: defaultFoundryAgentDir,
++        });
++        expect(config.models.providers["microsoft-foundry"].models[0]).toMatchObject({
++          contextWindow: 128_000,
++          maxTokens: 16_384,
++        });
++      } else {
++        expect(
++          provider.normalizeResolvedModel?.({
++            provider: "microsoft-foundry",
++            modelId: "manual-alias",
++            model,
++          }),
++        ).toMatchObject({ contextWindow: 128_000, maxTokens: 16_384 });
++      }
++    },
++  );
++});
+diff --git a/extensions/microsoft-foundry/provider.ts b/extensions/microsoft-foundry/provider.ts
+index 26a7a6d5..e21052da 100644
+--- a/extensions/microsoft-foundry/provider.ts
++++ b/extensions/microsoft-foundry/provider.ts
+@@ -24,31 +24,6 @@ import {
+ } from "./shared.js";
+ 
+ type FoundryProviderHooks = Pick<ProviderPlugin, "wrapStreamFn">;
+-type FoundryManagedModel = Pick<
+-  ModelProviderConfig["models"][number],
+-  "contextWindow" | "contextTokens" | "maxTokens" | "metadataSource" | "params"
+->;
+-
+-function resolveFoundryManagedModelLimitRepair(
+-  model: FoundryManagedModel,
+-  capabilities: ReturnType<typeof resolveFoundryModelCapabilities>,
+-): { contextWindow: number; maxTokens: number } | undefined {
+-  // Repair only provider-generated fallback limits; explicit user caps remain authoritative.
+-  if (
+-    model.params?.canonicalModelId !== capabilities.modelName ||
+-    model.contextWindow !== 128_000 ||
+-    model.maxTokens !== 16_384 ||
+-    model.contextTokens !== undefined ||
+-    model.metadataSource !== undefined ||
+-    !capabilities.modelName.toLowerCase().startsWith("gpt-5") ||
+-    capabilities.contextWindow === model.contextWindow ||
+-    capabilities.maxTokens === model.maxTokens
+-  ) {
+-    return undefined;
+-  }
+-  return { contextWindow: capabilities.contextWindow, maxTokens: capabilities.maxTokens };
+-}
+-
+ const openAIResponsesStreamHooks = buildProviderStreamFamilyHooks("openai-responses-defaults");
+ const wrapOpenAIResponsesStreamFn = openAIResponsesStreamHooks.wrapStreamFn;
+ 
+@@ -140,7 +115,6 @@ export function buildMicrosoftFoundryProvider(): ProviderPlugin {
+             selectedModelCapabilities.modelName,
+           ),
+           input: selectedModelCapabilities.input,
+-          ...resolveFoundryManagedModelLimitRepair(model, selectedModelCapabilities),
+         });
+         if (selectedModelCapabilities.compat) {
+           const explicitSupportsReasoningEffort =
+@@ -274,7 +248,6 @@ export function buildMicrosoftFoundryProvider(): ProviderPlugin {
+         thinkingLevelMap: capabilities.thinkingLevelMap ?? model.thinkingLevelMap,
+         params: mergeFoundryCanonicalModelParams(model.params, capabilities.modelName),
+         input: capabilities.input,
+-        ...resolveFoundryManagedModelLimitRepair(model, capabilities),
+         baseUrl: buildFoundryProviderBaseUrl(
+           endpoint,
+           modelId,
