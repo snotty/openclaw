@@ -42,7 +42,10 @@ all_tests=list(dict.fromkeys(regressions+[
 'src/agents/runtime-plan/credential-scoped-model.memo.test.ts',
 'src/agents/embedded-agent-runner/model.test.ts',
 ]))
+fast_owners=json.loads(subprocess.check_output(['node','--input-type=module','-e',
+ "import {isUnitFastTestFile as fast,isUnitFastTimerTestFile as timer,isUnitFastIsolatedTestFile as isolated} from './test/vitest/vitest.unit-fast-paths.mjs'; console.log(JSON.stringify(Object.fromEntries(process.argv.slice(1).map(p=>[p,timer(p)?'unit-fast-fake-timers':isolated(p)?'unit-fast-isolated':fast(p)?'unit-fast':null]))));",*all_tests],cwd=root,text=True))
 def owner(path):
+ if fast_owners.get(path):return fast_owners[path]
  if path.startswith('src/agents/embedded-agent-runner/run/'):return 'agents-embedded-agent-run'
  if path.startswith('src/agents/embedded-agent-runner/'):return 'agents-embedded-agent'
  if path.startswith('src/agents/'):
